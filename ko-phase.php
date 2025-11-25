@@ -25,7 +25,8 @@
           // Example placeholders until backend logic exists
           $matches = [
             ['match' => 'A1 vs B2', 'team1' => 'Team A', 'team2' => 'Team F'],
-            ['match' => 'C1 vs D2', 'team1' => 'Team C', 'team2' => 'Team D']
+            ['match' => 'C1 vs D2', 'team1' => 'Team C', 'team2' => 'Team D'],
+            ['match' => 'E1 vs F2', 'team1' => 'Team G', 'team2' => 'Team J']
           ];
           foreach ($matches as $index => $m) {
               $id = $index + 1;

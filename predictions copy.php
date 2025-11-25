@@ -56,7 +56,7 @@
             $home = "Team " . chr(64 + (($match_id % 26) ?: 26));
             $away = "Team " . chr(64 + ((($match_id + 1) % 26) ?: 26));
             $date = date("Y-m-d", strtotime("+$m days"));
-            $time = sprintf("%02d:%02d", rand(12, 22), "00");
+            $time = sprintf("%02d:%02d", rand(12, 22), rand(0, 59));
 
             echo "
             <tr>
@@ -66,11 +66,11 @@
               <td>$away</td>
               <td>
                 <label for='home_score_$match_id' class='visually-hidden'>Home Score</label>
-                <input type='number' min='0' class='form-control score-input' id='home_score_$match_id' name='home_score_$match_id' aria-label='Home score for $home'>
+                <input type='number' min='0' max='3' class='form-control score-input' id='home_score_$match_id' name='home_score_$match_id' aria-label='Home score for $home'>
               </td>
               <td>
                 <label for='away_score_$match_id' class='visually-hidden'>Away Score</label>
-                <input type='number' min='0' class='form-control score-input' id='away_score_$match_id' name='away_score_$match_id' aria-label='Away score for $away'>
+                <input type='number' min='0' max='3' class='form-control score-input' id='away_score_$match_id' name='away_score_$match_id' aria-label='Away score for $away'>
               </td>
               <td><span id='result_$match_id' class='fw-bold'>–</span></td>
             </tr>";
@@ -104,9 +104,9 @@ inputs.forEach(input => {
 
     if (home !== '' && away !== '') {
       if (parseInt(home) > parseInt(away)) {
-        resultCell.textContent = homeTeam;
+        resultCell.textContent = homeTeam + ' (Home)';
       } else if (parseInt(home) < parseInt(away)) {
-        resultCell.textContent = awayTeam;
+        resultCell.textContent = awayTeam + ' (Away)';
       } else {
         resultCell.textContent = 'Draw';
       }
@@ -137,7 +137,7 @@ function checkAllFilled() {
 // Redirect after "saving" (for testing)
 document.getElementById('predictionsForm').addEventListener('submit', e => {
   e.preventDefault();
-  window.location.href = 'ko-phase.php';
+  window.location.href = 'ko_phase.php';
 });
 </script>
 
