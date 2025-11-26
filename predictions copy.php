@@ -1,6 +1,35 @@
 <?php
 session_start();
+// Handle form submission
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
+    // Save all user tips into session
+    $_SESSION["group_predictions"] = $_POST;
+
+    // Redirect to KO phase
+    header("Location: ko-phase.php");
+    exit;
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Predictions</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+    table { background-color: #fff; }
+    th, td { text-align: center; vertical-align: middle; }
+  </style>
+</head>
+<body>
+
+<div class="container my-5">
+  <h1 class="text-center mb-4">Predictions</h1>
+
+<?php
 // === Define groups and matches ===
 $groups = [
   "A" => [
@@ -137,110 +166,101 @@ $groups = [
     ]
 ];
 
-// Handle form submission
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-
-    // 1. Initialize data structures
-    $standings_all = [];
-    foreach ($groups as $gName => $gdata) {
-        foreach ($gdata['teams'] as $team) {
-            $standings_all[$gName][$team] = ['gf' => 0, 'ga' => 0, 'gd' => 0, 'pts' => 0];
-        }
-    }
-
-    // 2. Process all matches and calculate points
-    foreach ($groups as $gName => $gdata) {
-        foreach ($gdata['matches'] as $i => $m) {
-            $homeKey = "{$gName}_home_$i";
-            $awayKey = "{$gName}_away_$i";
-            $homeScore = $_POST[$homeKey] ?? '';
-            $awayScore = $_POST[$awayKey] ?? '';
-
-            if ($homeScore !== '' && $awayScore !== '') {
-                $h = (int)$homeScore;
-                $a = (int)$awayScore;
-                
-                // Update stats
-                $standings_all[$gName][$m['home']]['gf'] += $h;
-                $standings_all[$gName][$m['home']]['ga'] += $a;
-                $standings_all[$gName][$m['away']]['gf'] += $a;
-                $standings_all[$gName][$m['away']]['ga'] += $h;
-
-                if ($h > $a) {
-                    $standings_all[$gName][$m['home']]['pts'] += 3;
-                } elseif ($h < $a) {
-                    $standings_all[$gName][$m['away']]['pts'] += 3;
-                } else {
-                    $standings_all[$gName][$m['home']]['pts'] += 1;
-                    $standings_all[$gName][$m['away']]['pts'] += 1;
-                }
-            }
-        }
-
-        // Calculate GD
-        foreach ($standings_all[$gName] as $team => $data) {
-            $standings_all[$gName][$team]['gd'] = $data['gf'] - $data['ga'];
-        }
-
-        // Sort this group
-        uasort($standings_all[$gName], function($a, $b) {
-            if ($a['pts'] != $b['pts']) return $b['pts'] - $a['pts']; // Points desc
-            if ($a['gd'] != $b['gd']) return $b['gd'] - $a['gd']; // GD desc
-            return $b['gf'] - $a['gf']; // GF desc
-        });
-    }
-
-    // 3. Extract Winners (THIS MUST BE OUTSIDE THE LOOP ABOVE)
-    $group_winners = [];
-    $group_runners = [];
-    $group_third = [];
-
-    foreach ($standings_all as $gName => $st) {
-        $teams = array_keys($st); // Get teams in sorted order
-        $group_winners[$gName] = $teams[0];
-        $group_runners[$gName] = $teams[1];
-        $group_third[$gName] = $teams[2];
-    }
-
-    // Save to Session
-    $_SESSION['group_predictions'] = $_POST;
-    $_SESSION['group_winners'] = $group_winners;
-    $_SESSION['group_runners'] = $group_runners;
-    $_SESSION['group_third'] = $group_third;
-    
-    // Clear any previous KO saved data so we start fresh
-    unset($_SESSION['saved_post']); 
-
-    header("Location: ko-phase.php");
-    exit;
+// Prepare empty standings structure for each group
+$standings_all = [];
+foreach ($groups as $gName => $gdata) {
+  foreach ($gdata['teams'] as $team) {
+    $standings_all[$gName][$team] = ['gf' => 0, 'ga' => 0, 'gd' => 0, 'pts' => 0];
+  }
 }
+
+// This will hold third-place entries across groups
+$thirdplace_all = [];
+
+// ---- Process form submission for all groups ----
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  foreach ($groups as $gName => $gdata) {
+    $matches = $gdata['matches'];
+
+    foreach ($matches as $i => $m) {
+      // input names include group prefix to avoid collision
+      $homeKey = "{$gName}_home_$i";
+      $awayKey = "{$gName}_away_$i";
+
+      $homeScore = $_POST[$homeKey] ?? '';
+      $awayScore = $_POST[$awayKey] ?? '';
+
+      if ($homeScore !== '' && $awayScore !== '') {
+        $h = (int)$homeScore;
+        $a = (int)$awayScore;
+
+        // Update goals for/against
+        $standings_all[$gName][$m['home']]['gf'] += $h;
+        $standings_all[$gName][$m['home']]['ga'] += $a;
+        $standings_all[$gName][$m['away']]['gf'] += $a;
+        $standings_all[$gName][$m['away']]['ga'] += $h;
+
+        // Update points
+        if ($h > $a) {
+          $standings_all[$gName][$m['home']]['pts'] += 3;
+        } elseif ($h < $a) {
+          $standings_all[$gName][$m['away']]['pts'] += 3;
+        } else {
+          $standings_all[$gName][$m['home']]['pts'] += 1;
+          $standings_all[$gName][$m['away']]['pts'] += 1;
+        }
+      }
+    } // end matches loop
+
+    // calculate gd
+    foreach ($standings_all[$gName] as $team => $data) {
+      $standings_all[$gName][$team]['gd'] = $data['gf'] - $data['ga'];
+    }
+
+    // sort standings - points, then GD, then GF
+    uasort($standings_all[$gName], function($a, $b) {
+      if ($a['pts'] != $b['pts']) return $b['pts'] - $a['pts'];
+      if ($a['gd'] != $b['gd']) return $b['gd'] - $a['gd'];
+      return $b['gf'] - $a['gf'];
+    });
+
+    // extract 3rd place for this group (after sort)
+    $pos = 1;
+    foreach ($standings_all[$gName] as $team => $data) {
+      if ($pos === 3) {
+        $thirdplace_all[] = [
+          'group' => $gName,
+          'team'  => $team,
+          'gf'    => $data['gf'],
+          'ga'    => $data['ga'],
+          'gd'    => $data['gd'],
+          'pts'   => $data['pts']
+        ];
+        break; // found 3rd, no need to continue
+      }
+      $pos++;
+    }
+    // Determine 1st, 2nd, 3rd per group
+$group_winners = [];
+$group_runners = [];
+$group_third = [];
+
+foreach ($standings_all as $gName => $st) {
+    $teams = array_keys($st);
+    $group_winners[$gName] = $teams[0]; // 1st place
+    $group_runners[$gName] = $teams[1]; // 2nd place
+    $group_third[$gName] = $teams[2];   // 3rd place
+}
+$_SESSION['group_winners'] = $group_winners;
+$_SESSION['group_runners'] = $group_runners;
+$_SESSION['group_third'] = $group_third;
+  } // end groups loop
+} // end POST
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Predictions</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body { background-color: #f8f9fa; }
-    table { background-color: #fff; }
-    th, td { text-align: center; vertical-align: middle; }
-    .result-cell { font-weight: bold; color: #0d6efd; }
-  </style>
-</head>
-<body>
-
-<div class="container my-5">
-  <h1 class="text-center mb-4">Predictions</h1>
-
+  <!-- SINGLE FORM for both groups -->
   <form method="post">
-    <?php 
-    // If we have saved data in session (returning user), use it. Otherwise use POST (if any)
-    $savedData = $_SESSION['group_predictions'] ?? [];
-    
-    foreach ($groups as $gName => $gdata): ?>
+    <?php foreach ($groups as $gName => $gdata): ?>
       <h2 class="mt-4">Group <?= htmlspecialchars($gName) ?></h2>
       <div class="table-responsive mb-3">
         <table class="table table-bordered align-middle">
@@ -262,17 +282,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $date = date("Y-m-d", strtotime("+$id days"));
                 $time = sprintf("%02d:%02d", rand(14,22), "00");
 
+                // use group-prefixed input names
                 $homeName = "{$gName}_home_$id";
                 $awayName = "{$gName}_away_$id";
 
-                // Retrieve value from Saved Session data (or POST if submitting failed)
-                $homeVal = $savedData[$homeName] ?? ($_POST[$homeName] ?? '');
-                $awayVal = $savedData[$awayName] ?? ($_POST[$awayName] ?? '');
-                
+                $homeVal = $_POST[$homeName] ?? '';
+                $awayVal = $_POST[$awayName] ?? '';
                 $resultText = "–";
-                
-                // Pure PHP Rendering for result column
-                // This will only show if data exists (e.g. after coming back from KO phase)
                 if ($homeVal !== '' && $awayVal !== '') {
                   $h = (int)$homeVal; $a = (int)$awayVal;
                   if ($h > $a) $resultText = $m['home'];
@@ -283,11 +299,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 echo "<tr>
                         <td>" . ($id + 1) . "</td>
                         <td>$date $time</td>
-                        <td class='team-home'>{$m['home']}</td>
-                        <td class='team-away'>{$m['away']}</td>
+                        <td>{$m['home']}</td>
+                        <td>{$m['away']}</td>
                         <td><input type='number' class='form-control' name='$homeName' min='0' max='9' value='".htmlspecialchars($homeVal)."'></td>
                         <td><input type='number' class='form-control' name='$awayName' min='0' max='9' value='".htmlspecialchars($awayVal)."'></td>
-                        <td class='result-cell'>".htmlspecialchars($resultText)."</td>
+                        <td><strong>".htmlspecialchars($resultText)."</strong></td>
                       </tr>";
                 $id++;
               }
@@ -302,32 +318,58 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <button type="submit" class="btn btn-primary px-4" disabled>Save & Show Standings</button>
     </div>
   </form>
-</div>
+</div> <!-- container -->
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  // select all number inputs inside the main form
   const scoreInputs = document.querySelectorAll('form input[type="number"]');
   const saveBtn = document.querySelector('form button[type="submit"]');
-  const fillRandomBtn = document.getElementById('fillRandom');
+  const fillRandomBtn = document.getElementById('fillRandom'); // add this button in HTML
 
-  // Helper: check all score inputs to enable save button
+  // helper: update predicted result for a single row
+  function updateRowResult(input) {
+    const row = input.closest('tr');
+    if (!row) return;
+    const homeInput = row.querySelector('input[type="number"][name*="_home_"]');
+    const awayInput = row.querySelector('input[type="number"][name*="_away_"]');
+    const resultCell = row.querySelector('td:last-child');
+
+    const homeVal = homeInput && homeInput.value !== '' ? parseInt(homeInput.value, 10) : null;
+    const awayVal = awayInput && awayInput.value !== '' ? parseInt(awayInput.value, 10) : null;
+
+    if (homeVal !== null && awayVal !== null) {
+      const homeTeam = row.cells[2].innerText.trim();
+      const awayTeam = row.cells[3].innerText.trim();
+      if (homeVal > awayVal) resultCell.innerHTML = "<strong>"+homeTeam+"</strong>";
+      else if (homeVal < awayVal) resultCell.innerHTML = "<strong>"+awayTeam+"</strong>";
+      else resultCell.innerHTML = "<strong>Draw</strong>";
+    } else {
+      resultCell.textContent = '–';
+    }
+  }
+
+  // helper: check all score inputs — enable Save when all filled
   function checkAllFilled() {
     const allFilled = Array.from(scoreInputs).every(i => i.value !== '' && i.value !== null);
     if (saveBtn) saveBtn.disabled = !allFilled;
   }
 
+  // attach listener to each score input
   scoreInputs.forEach(input => {
-    input.addEventListener('input', () => {
+    input.addEventListener('input', (e) => {
+      updateRowResult(e.target);
       checkAllFilled();
     });
   });
 
+  // Fill random scores (0..3) for empty inputs and run update
   if (fillRandomBtn) {
     fillRandomBtn.addEventListener('click', () => {
       scoreInputs.forEach(inp => {
         if (inp.value === '' || inp.value === null) {
-          inp.value = Math.floor(Math.random() * 4);
-          // Trigger input event to update valid state
+          inp.value = Math.floor(Math.random() * 4); // 0..3
+          // manually trigger input event so result updates
           inp.dispatchEvent(new Event('input', { bubbles: true }));
         }
       });
@@ -335,9 +377,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Initial check
+  // initial run on page load (populated values from POST)
+  scoreInputs.forEach(i => updateRowResult(i));
   checkAllFilled();
 });
 </script>
+
+
 </body>
 </html>
