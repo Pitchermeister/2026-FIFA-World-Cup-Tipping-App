@@ -1,19 +1,20 @@
+<?php
+session_start();
+if (!isset($_SESSION["user"])) {
+    header("Location: login_register.php");
+    exit;
+}
+?>
+
 <!DOCTYPE html>
 <html>
-<head><title>Home</title></head>
+<head>
+    <title>Home</title>
+</head>
 <body>
+<?php include "nav.php"; ?>
 
-<h1>2026 FIFA World Cup Tipping App</h1>
-
-<p>Welcome. Use the links below:</p>
-
-<a href="login.php">Login</a><br>
-<a href="profile.php">Profile</a><br>
-<a href="predictions.php">Predictions</a><br>
-<a href="mytips.php">My Tips</a><br>
-<a href="standings.php">Standings</a><br>
-<a href="tournament_schedule.php">Tournament Schedule (Admin)</a><br>
-<a href="update_results.php">Update Results (Admin)</a><br>
+<h2>Willkommen, <?php echo $_SESSION["user"]; ?>!</h2>
 
 </body>
 </html>
