@@ -7,7 +7,7 @@
 
 <p>Welcome. Use the links below:</p>
 
-<a href="login.php">Login</a><br>
+<a href="login_register.php">Login</a><br>
 <a href="profile.php">Profile</a><br>
 <a href="predictions.php">Predictions</a><br>
 <a href="mytips.php">My Tips</a><br>

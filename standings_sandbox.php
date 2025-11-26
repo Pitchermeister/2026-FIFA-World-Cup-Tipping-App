@@ -1,9 +1,12 @@
+<?php
+session_start();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Groups Stage Sandbox (PHP)</title>
+  <title>Groups Stage Sandbox</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body { background-color: #f8f9fa; }
@@ -20,135 +23,135 @@
 // === Define groups and matches ===
 $groups = [
   "A" => [
-    "teams" => ["Mexico", "England", "Jordan", "Egypt"],
+    "teams" => ["Mexico", "Croatia", "Jordan", "Egypt"],
     "matches" => [
-      ["home" => "Mexico", "away" => "England"],
+      ["home" => "Mexico", "away" => "Croatia"],
       ["home" => "Jordan", "away" => "Egypt"],
       ["home" => "Mexico", "away" => "Jordan"],
-      ["home" => "England", "away" => "Egypt"],
+      ["home" => "Croatia", "away" => "Egypt"],
       ["home" => "Mexico", "away" => "Egypt"],
-      ["home" => "England", "away" => "Jordan"]
+      ["home" => "Croatia", "away" => "Jordan"]
     ]
   ],
   "B" => [
-    "teams" => ["Canada", "Brazil", "Japan", "Ghana"],
+    "teams" => ["Canada", "Morocco", "Austria", "Ghana"],
     "matches" => [
-      ["home" => "Canada", "away" => "Brazil"],
-      ["home" => "Japan", "away" => "Ghana"],
-      ["home" => "Canada", "away" => "Japan"],
-      ["home" => "Brazil", "away" => "Ghana"],
+      ["home" => "Canada", "away" => "Morocco"],
+      ["home" => "Austria", "away" => "Ghana"],
+      ["home" => "Canada", "away" => "Austria"],
+      ["home" => "Morocco", "away" => "Ghana"],
       ["home" => "Canada", "away" => "Ghana"],
-      ["home" => "Brazil", "away" => "Japan"]
+      ["home" => "Morocco", "away" => "Austria"]
     ]
     ],
   "C" => [
-    "teams" => ["TeamC1", "TeamC2", "TeamC3", "TeamC4"],
+    "teams" => ["Spain", "ITA/NIR/WAL/BIH", "TUR/ROU/SVK/KOS", "Uzbekistan"],
     "matches" => [
-      ["home" => "TeamC1", "away" => "TeamC2"],
-      ["home" => "TeamC3", "away" => "TeamC4"],
-      ["home" => "TeamC2", "away" => "TeamC4"],
-      ["home" => "TeamC1", "away" => "TeamC3"],
-      ["home" => "TeamC2", "away" => "TeamC3"],
-      ["home" => "TeamC4", "away" => "TeamC1"]
+      ["home" => "Spain", "away" => "ITA/NIR/WAL/BIH"],
+      ["home" => "TUR/ROU/SVK/KOS", "away" => "Uzbekistan"],
+      ["home" => "ITA/NIR/WAL/BIH", "away" => "Uzbekistan"],
+      ["home" => "Spain", "away" => "TUR/ROU/SVK/KOS"],
+      ["home" => "ITA/NIR/WAL/BIH", "away" => "TUR/ROU/SVK/KOS"],
+      ["home" => "Uzbekistan", "away" => "Spain"]
     ]
     ],
   "D" => [
-    "teams" => ["USA", "Iran", "Colombia", "New-Zealand"],
+    "teams" => ["USA", "Algeria", "Colombia", "New-Zealand"],
     "matches" => [
-      ["home" => "USA", "away" => "Iran"],
+      ["home" => "USA", "away" => "Algeria"],
       ["home" => "Colombia", "away" => "New-Zealand"],
-      ["home" => "Iran", "away" => "Colombia"],
+      ["home" => "Algeria", "away" => "Colombia"],
       ["home" => "USA", "away" => "New-Zealand"],
-      ["home" => "New-Zealand", "away" => "Iran"],
+      ["home" => "New-Zealand", "away" => "Algeria"],
       ["home" => "Colombia", "away" => "USA"]
     ]
     ],
     "E" => [
-    "teams" => ["TeamE1", "TeamE2", "TeamE3", "TeamE4"],
+    "teams" => ["Argentina", "Uruguay", "Australia", "Qatar"],
     "matches" => [
-      ["home" => "TeamE1", "away" => "TeamE2"],
-      ["home" => "TeamE3", "away" => "TeamE4"],
-      ["home" => "TeamE2", "away" => "TeamE4"],
-      ["home" => "TeamE1", "away" => "TeamE3"],
-      ["home" => "TeamE2", "away" => "TeamE3"],
-      ["home" => "TeamE4", "away" => "TeamE1"]
+      ["home" => "Argentina", "away" => "Uruguay"],
+      ["home" => "Australia", "away" => "Qatar"],
+      ["home" => "Uruguay", "away" => "Qatar"],
+      ["home" => "Argentina", "away" => "Australia"],
+      ["home" => "Uruguay", "away" => "Australia"],
+      ["home" => "Qatar", "away" => "Argentina"]
     ]
     ],
     "F" => [
-    "teams" => ["TeamF1", "TeamF2", "TeamF3", "TeamF4"],
+    "teams" => ["France", "Switzerland", "UKR/SWE/POL/ALB", "COD/JAM/NCL"],
     "matches" => [
-      ["home" => "TeamF1", "away" => "TeamF2"],
-      ["home" => "TeamF3", "away" => "TeamF4"],
-      ["home" => "TeamF2", "away" => "TeamF4"],
-      ["home" => "TeamF1", "away" => "TeamF3"],
-      ["home" => "TeamF2", "away" => "TeamF3"],
-      ["home" => "TeamF4", "away" => "TeamF1"]
+      ["home" => "France", "away" => "Switzerland"],
+      ["home" => "UKR/SWE/POL/ALB", "away" => "COD/JAM/NCL"],
+      ["home" => "Switzerland", "away" => "COD/JAM/NCL"],
+      ["home" => "France", "away" => "UKR/SWE/POL/ALB"],
+      ["home" => "Switzerland", "away" => "UKR/SWE/POL/ALB"],
+      ["home" => "COD/JAM/NCL", "away" => "France"]
     ]
     ],
     "G" => [
-    "teams" => ["TeamG1", "TeamG2", "TeamG3", "TeamG4"],
+    "teams" => ["England", "Japan", "Norway", "IRQ/BOL/SUR"],
     "matches" => [
-      ["home" => "TeamG1", "away" => "TeamG2"],
-      ["home" => "TeamG3", "away" => "TeamG4"],
-      ["home" => "TeamG2", "away" => "TeamG4"],
-      ["home" => "TeamG1", "away" => "TeamG3"],
-      ["home" => "TeamG2", "away" => "TeamG3"],
-      ["home" => "TeamG4", "away" => "TeamG1"]
+      ["home" => "England", "away" => "Japan"],
+      ["home" => "Norway", "away" => "IRQ/BOL/SUR"],
+      ["home" => "Japan", "away" => "IRQ/BOL/SUR"],
+      ["home" => "England", "away" => "Norway"],
+      ["home" => "Japan", "away" => "Norway"],
+      ["home" => "IRQ/BOL/SUR", "away" => "England"]
     ]
     ],
     "H" => [
-    "teams" => ["TeamH1", "TeamH2", "TeamH3", "TeamH4"],
+    "teams" => ["Brazil", "Senegal", "Panama", "Saudi Arabia"],
     "matches" => [
-      ["home" => "TeamH1", "away" => "TeamH2"],
-      ["home" => "TeamH3", "away" => "TeamH4"],
-      ["home" => "TeamH2", "away" => "TeamH4"],
-      ["home" => "TeamH1", "away" => "TeamH3"],
-      ["home" => "TeamH2", "away" => "TeamH3"],
-      ["home" => "TeamH4", "away" => "TeamH1"]
+      ["home" => "Brazil", "away" => "Senegal"],
+      ["home" => "Panama", "away" => "Saudi Arabia"],
+      ["home" => "Senegal", "away" => "Saudi Arabia"],
+      ["home" => "Brazil", "away" => "Panama"],
+      ["home" => "Senegal", "away" => "Panama"],
+      ["home" => "Saudi Arabia", "away" => "Brazil"]
     ]
     ],
     "I" => [
-    "teams" => ["TeamI1", "TeamI2", "TeamI3", "TeamI4"],
+    "teams" => ["Portugal", "Iran", "Scotland", "South Africa"],
     "matches" => [
-      ["home" => "TeamI1", "away" => "TeamI2"],
-      ["home" => "TeamI3", "away" => "TeamI4"],
-      ["home" => "TeamI2", "away" => "TeamI4"],
-      ["home" => "TeamI1", "away" => "TeamI3"],
-      ["home" => "TeamI2", "away" => "TeamI3"],
-      ["home" => "TeamI4", "away" => "TeamI1"]
+      ["home" => "Portugal", "away" => "Iran"],
+      ["home" => "Scotland", "away" => "South Africa"],
+      ["home" => "Iran", "away" => "South Africa"],
+      ["home" => "Portugal", "away" => "Scotland"],
+      ["home" => "Iran", "away" => "Scotland"],
+      ["home" => "South Africa", "away" => "Portugal"]
     ]
     ],
     "J" => [
-    "teams" => ["TeamJ1", "TeamJ2", "TeamJ3", "TeamJ4"],
+    "teams" => ["Netherlands", "DEN/MKD/CZE/IRL", "Paraguay", "Cabo Verde"],
     "matches" => [
-      ["home" => "TeamJ1", "away" => "TeamJ2"],
-      ["home" => "TeamJ3", "away" => "TeamJ4"],
-      ["home" => "TeamJ2", "away" => "TeamJ4"],
-      ["home" => "TeamJ1", "away" => "TeamJ3"],
-      ["home" => "TeamJ2", "away" => "TeamJ3"],
-      ["home" => "TeamJ4", "away" => "TeamJ1"]
+      ["home" => "Netherlands", "away" => "DEN/MKD/CZE/IRL"],
+      ["home" => "Paraguay", "away" => "Cabo Verde"],
+      ["home" => "DEN/MKD/CZE/IRL", "away" => "Cabo Verde"],
+      ["home" => "Netherlands", "away" => "Paraguay"],
+      ["home" => "DEN/MKD/CZE/IRL", "away" => "Paraguay"],
+      ["home" => "Cabo Verde", "away" => "Netherlands"]
     ]
     ],
     "K" => [
-    "teams" => ["TeamK1", "TeamK2", "TeamK3", "TeamK4"],
+    "teams" => ["Belgium", "South Korea", "Tunisia", "Curaçao"],
     "matches" => [
-      ["home" => "TeamK1", "away" => "TeamK2"],
-      ["home" => "TeamK3", "away" => "TeamK4"],
-      ["home" => "TeamK2", "away" => "TeamK4"],
-      ["home" => "TeamK1", "away" => "TeamK3"],
-      ["home" => "TeamK2", "away" => "TeamK3"],
-      ["home" => "TeamK4", "away" => "TeamK1"]
+      ["home" => "Belgium", "away" => "South Korea"],
+      ["home" => "Tunisia", "away" => "Curaçao"],
+      ["home" => "South Korea", "away" => "Curaçao"],
+      ["home" => "Belgium", "away" => "Tunisia"],
+      ["home" => "South Korea", "away" => "Tunisia"],
+      ["home" => "Curaçao", "away" => "Belgium"]
     ]
     ],
     "L" => [
-    "teams" => ["TeamL1", "TeamL2", "TeamL3", "TeamL4"],
+    "teams" => ["Germany", "Ecuador", "Côte d'Ivoire", "Haiti"],
     "matches" => [
-      ["home" => "TeamL1", "away" => "TeamL2"],
-      ["home" => "TeamL3", "away" => "TeamL4"],
-      ["home" => "TeamL2", "away" => "TeamL4"],
-      ["home" => "TeamL1", "away" => "TeamL3"],
-      ["home" => "TeamL2", "away" => "TeamL3"],
-      ["home" => "TeamL4", "away" => "TeamL1"]
+      ["home" => "Germany", "away" => "Ecuador"],
+      ["home" => "Côte d'Ivoire", "away" => "Haiti"],
+      ["home" => "Ecuador", "away" => "Haiti"],
+      ["home" => "Germany", "away" => "Côte d'Ivoire"],
+      ["home" => "Ecuador", "away" => "Côte d'Ivoire"],
+      ["home" => "Haiti", "away" => "Germany"]
     ]
     ]
 ];
@@ -227,6 +230,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
       $pos++;
     }
+    // Determine 1st, 2nd, 3rd per group
+$group_winners = [];
+$group_runners = [];
+$group_third = [];
+
+foreach ($standings_all as $gName => $st) {
+    $teams = array_keys($st);
+    $group_winners[$gName] = $teams[0]; // 1st place
+    $group_runners[$gName] = $teams[1]; // 2nd place
+    $group_third[$gName] = $teams[2];   // 3rd place
+}
+$_SESSION['group_winners'] = $group_winners;
+$_SESSION['group_runners'] = $group_runners;
+$_SESSION['group_third'] = $group_third;
   } // end groups loop
 } // end POST
 ?>
