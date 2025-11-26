@@ -1,9 +1,13 @@
 <?php
 session_start();
-if (!isset($_SESSION["user"])) {
-    header("Location: login_register.php");
+if (!isset($_SESSION["user"]) || $_SESSION["role"] !== "admin") {
+    header("Location: home.php");
     exit;
 }
+
+$results = file_exists("results.txt")
+    ? file("results.txt", FILE_IGNORE_NEW_LINES)
+    : [];
 ?>
 
 <!DOCTYPE html>
@@ -14,7 +18,13 @@ if (!isset($_SESSION["user"])) {
 <body>
 <?php include "nav.php"; ?>
 
-<h2>Ergebnisse aktualisieren</h2>
+<h2>Ergebnisse aktualisieren (Admin)</h2>
+
+<ul>
+<?php foreach ($results as $r): ?>
+    <li><?php echo $r; ?></li>
+<?php endforeach; ?>
+</ul>
 
 </body>
 </html>

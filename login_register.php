@@ -15,9 +15,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         foreach ($users as $user) {
             $parts = explode("|", $user);
+
             if ($parts[0] === $username && password_verify($password, $parts[1])) {
+
                 $_SESSION["user"] = $username;
                 $_SESSION["profile"] = $parts[2] ?? "";
+                $_SESSION["role"] = $parts[3] ?? "user";
+
                 header("Location: home.php");
                 exit;
             }
@@ -38,7 +42,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <h2>Login</h2>
 
-<?php if (isset($_GET["registered"])) echo "<p style='color:green;'>Registrierung erfolgreich!</p>"; ?>
 <p style="color:red;"><?php echo $message; ?></p>
 
 <form method="POST">

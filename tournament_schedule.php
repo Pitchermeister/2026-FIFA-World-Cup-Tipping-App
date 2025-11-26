@@ -1,9 +1,13 @@
 <?php
 session_start();
-if (!isset($_SESSION["user"])) {
-    header("Location: login_register.php");
+if (!isset($_SESSION["user"]) || $_SESSION["role"] !== "admin") {
+    header("Location: home.php");
     exit;
 }
+
+$matches = file_exists("matches.txt")
+    ? file("matches.txt", FILE_IGNORE_NEW_LINES)
+    : [];
 ?>
 
 <!DOCTYPE html>
@@ -14,7 +18,13 @@ if (!isset($_SESSION["user"])) {
 <body>
 <?php include "nav.php"; ?>
 
-<h2>Turnierplan</h2>
+<h2>Turnierplan (Admin)</h2>
+
+<ul>
+<?php foreach ($matches as $m): ?>
+    <li><?php echo $m; ?></li>
+<?php endforeach; ?>
+</ul>
 
 </body>
 </html>
