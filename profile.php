@@ -1,93 +1,166 @@
 <?php
 session_start();
+
 if (!isset($_SESSION["user"])) {
-    header("Location: login_register.php");
+    header("Location: login.php");
     exit;
 }
 
 $message = "";
+$username = $_SESSION["user"];
+$currentProfile = $_SESSION["profile"] ?? "";
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
+// users.txt laden
+$users = file("users.txt", FILE_IGNORE_NEW_LINES);
 
-    if (isset($_POST["remove"])) {
-        $_SESSION["profile"] = "";
-        $lines = file("users.txt", FILE_IGNORE_NEW_LINES);
-        $out = [];
+// Profilbild ändern
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["profile"])) {
 
-        foreach ($lines as $line) {
-            $p = explode("|", $line);
-            if ($p[0] === $_SESSION["user"]) {
-                $out[] = $p[0] . "|" . $p[1] . "||" . $p[3];
-            } else {
-                $out[] = $line;
-            }
+    $file = $_FILES["profile"];
+
+    if ($file["error"] === 0) {
+
+        $allowed = ["image/jpeg", "image/png", "image/jpg"];
+        $maxSize = 5 * 1024 * 1024; // 5MB
+
+        if (!in_array($file["type"], $allowed)) {
+            $message = "Nur JPG oder PNG erlaubt!";
         }
-
-        file_put_contents("users.txt", implode("\n", $out) . "\n");
-    }
-
-    if (isset($_FILES["profile"]["name"]) && $_FILES["profile"]["name"] !== "") {
-
-        $allowed = ["image/jpeg", "image/png"];
-        $type = mime_content_type($_FILES["profile"]["tmp_name"]);
-        $size = $_FILES["profile"]["size"];
-
-        if (!in_array($type, $allowed)) {
-            $message = "Nur JPG und PNG erlaubt.";
-        } elseif ($size > 5 * 1024 * 1024) {
-            $message = "Datei zu groß (max 5MB).";
+        elseif ($file["size"] > $maxSize) {
+            $message = "Datei darf max. 5MB groß sein!";
         } else {
-            $fileName = time() . "_" . basename($_FILES["profile"]["name"]);
-            move_uploaded_file($_FILES["profile"]["tmp_name"], "uploads/" . $fileName);
-            $_SESSION["profile"] = $fileName;
+            $ext = pathinfo($file["name"], PATHINFO_EXTENSION);
+            $newName = "uploads/" . $username . "." . $ext;
 
-            $lines = file("users.txt", FILE_IGNORE_NEW_LINES);
-            $out = [];
+            if (!is_dir("uploads")) {
+                mkdir("uploads");
+            }
 
-            foreach ($lines as $line) {
+            move_uploaded_file($file["tmp_name"], $newName);
+
+            // users.txt aktualisieren
+            foreach ($users as $i => $line) {
                 $p = explode("|", $line);
-                if ($p[0] === $_SESSION["user"]) {
-                    $out[] = $p[0] . "|" . $p[1] . "|" . $fileName . "|" . $p[3];
-                } else {
-                    $out[] = $line;
+                if ($p[0] === $username) {
+                    $p[2] = $newName;
+                    $users[$i] = implode("|", $p);
+                    break;
                 }
             }
 
-            file_put_contents("users.txt", implode("\n", $out) . "\n");
+            file_put_contents("users.txt", implode("\n", $users) . "\n");
+
+            $_SESSION["profile"] = $newName;
+            $currentProfile = $newName;
+
+            $message = "Profilbild aktualisiert!";
         }
     }
 }
-?>
 
+// Profilbild löschen
+if (isset($_POST["delete"])) {
+
+    if ($currentProfile && file_exists($currentProfile)) {
+        unlink($currentProfile);
+    }
+
+    foreach ($users as $i => $line) {
+        $p = explode("|", $line);
+        if ($p[0] === $username) {
+            $p[2] = "";
+            $users[$i] = implode("|", $p);
+            break;
+        }
+    }
+
+    file_put_contents("users.txt", implode("\n", $users) . "\n");
+
+    $_SESSION["profile"] = "";
+    $currentProfile = "";
+    $message = "Profilbild entfernt!";
+}
+?>
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Profil</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2e7d32;
+        }
+        .message {
+            color: red;
+            margin-bottom: 15px;
+        }
+        img {
+            max-width: 200px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        .button {
+            background: #2e7d32;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background: #1b5e20;
+        }
+    </style>
 </head>
 <body>
+
 <?php include "nav.php"; ?>
 
-<h2>Profil von <?php echo $_SESSION["user"]; ?></h2>
+<div class="container">
+    <h1>👤 Profil</h1>
 
-<?php if ($message !== "") echo "<p style='color:red;'>$message</p>"; ?>
+    <?php if ($message): ?>
+        <p class="message"><?php echo $message; ?></p>
+    <?php endif; ?>
 
-<?php
-if ($_SESSION["profile"] !== "") {
-    echo '<img src="uploads/' . $_SESSION["profile"] . '" width="150"><br><br>';
-}
-?>
+    <p><strong>Benutzername:</strong> <?php echo htmlspecialchars($username); ?></p>
 
-<form method="POST" enctype="multipart/form-data">
-    <label>Neues Profilbild:</label>
-    <input type="file" name="profile"><br><br>
-    <button type="submit">Upload</button>
-</form>
+    <h3>Profilbild:</h3>
 
-<br>
+    <?php if ($currentProfile): ?>
+        <img src="<?php echo $currentProfile; ?>" alt="Profilbild"><br>
 
-<form method="POST">
-    <button type="submit" name="remove">Profilbild entfernen</button>
-</form>
+        <form method="POST">
+            <button class="button" name="delete">Profilbild entfernen</button>
+        </form>
+
+    <?php else: ?>
+        <p>Kein Bild hochgeladen.</p>
+    <?php endif; ?>
+
+    <hr>
+
+    <form method="POST" enctype="multipart/form-data">
+        <label>Neues Profilbild hochladen:</label><br><br>
+        <input type="file" name="profile" required><br><br>
+        <button type="submit" class="button">Speichern</button>
+    </form>
+
+</div>
 
 </body>
 </html>

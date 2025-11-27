@@ -1,47 +1,47 @@
 <?php
 session_start();
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Home</title>
+    <meta charset="UTF-8">
+    <title>Home - WM 2026 Tippspiel</title>
+    <style>
+        body { font-family: Arial; background-color: #f0f0f0; margin: 0; }
+        .container {
+            max-width: 800px; margin: 20px auto; background: white;
+            padding: 30px; border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #2e7d32; }
+        a.button {
+            background: #2e7d32; color: white; padding: 10px 20px;
+            text-decoration: none; border-radius: 5px; display: inline-block;
+            margin-top: 10px;
+        }
+        a.button:hover { background: #1b5e20; }
+    </style>
 </head>
 <body>
+
 <?php include "nav.php"; ?>
 
-<h1>2026 FIFA World Cup Tipping App</h1>
+<div class="container">
+    <h1>🏆 FIFA WM 2026 Tippspiel</h1>
 
-<p>Die App ermöglicht dir, Tipps für alle Spiele der WM 2026 abzugeben und Punkte zu sammeln.</p>
+    <?php if (isset($_SESSION["user"])): ?>
+        <p>Willkommen zurück, <strong><?php echo htmlspecialchars($_SESSION["user"]); ?></strong>!</p>
 
-<h3>Punktesystem:</h3>
-<ul>
-    <li>3 Punkte – richtiges Ergebnis</li>
-    <li>2 Punkte – richtige Tordifferenz</li>
-    <li>1 Punkt – richtige Tendenz</li>
-</ul>
+        <a href="predictions.php" class="button">⚽ Tipps abgeben</a>
+        <a href="mytips.php" class="button">📋 Meine Tipps</a>
+        <a href="standings.php" class="button">🏆 Rangliste</a>
 
-<h3>WM 2026 Infos:</h3>
-<ul>
-    <li>Ausrichter: USA, Kanada, Mexiko</li>
-    <li>104 Spiele</li>
-    <li>48 Teams</li>
-</ul>
-
-<?php if (!isset($_SESSION["user"])): ?>
-
-    <h3>Bitte einloggen:</h3>
-    <a href="login_register.php">Login</a><br>
-    <a href="register.php">Account erstellen</a>
-
-<?php else: ?>
-
-    <h3>Schnellzugriff:</h3>
-    <a href="predictions.php">Predictions</a><br>
-    <a href="my_tips.php">My Tips</a><br>
-    <a href="standings.php">Standings</a><br>
-
-<?php endif; ?>
+    <?php else: ?>
+        <p>Tippe alle Spiele der WM 2026 und sammle Punkte!</p>
+        <a href="login.php" class="button">🔐 Login</a>
+        <a href="register.php" class="button">📝 Registrieren</a>
+    <?php endif; ?>
+</div>
 
 </body>
 </html>

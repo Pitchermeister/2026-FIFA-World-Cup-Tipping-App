@@ -1,2 +1,2 @@
-user_1|pw|user
-admin|adminpw|admin
+admin|$2b$12$V74sY6xJADvCxkdQl3iBiuTAcg8lU05LPTR/6nwiIaf9aRJCwwqU.||admin
+test|$2b$12$E2UkIdObG955NWRBUqLAD.BvnhSMK.MpCfE.o.DjdKQt4RTjd.bly||user
