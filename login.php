@@ -27,9 +27,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             }
         }
 
-        $message = "Login fehlgeschlagen!";
+        $message = "Login failed!";
     } else {
-        $message = "Alle Felder müssen ausgefüllt sein!";
+        $message = "All fields must be filled!";
     }
 }
 ?>
@@ -51,10 +51,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <label>Username:</label><br>
     <input name="username"><br><br>
 
-    <label>Passwort:</label><br>
+    <label>Password:</label><br>
     <input type="password" name="password"><br><br>
 
-    <button type="submit">Einloggen</button>
+    <button type="submit">Login</button>
 </form>
 
 </body>

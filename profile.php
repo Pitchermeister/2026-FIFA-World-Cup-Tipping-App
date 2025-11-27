@@ -24,10 +24,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["profile"])) {
         $maxSize = 5 * 1024 * 1024; // 5MB
 
         if (!in_array($file["type"], $allowed)) {
-            $message = "Nur JPG oder PNG erlaubt!";
+            $message = "Only JPG or PNG allowed!";
         }
         elseif ($file["size"] > $maxSize) {
-            $message = "Datei darf max. 5MB groß sein!";
+            $message = "File must be max. 5MB!";
         } else {
             $ext = pathinfo($file["name"], PATHINFO_EXTENSION);
             $newName = "uploads/" . $username . "." . $ext;
@@ -53,7 +53,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["profile"])) {
             $_SESSION["profile"] = $newName;
             $currentProfile = $newName;
 
-            $message = "Profilbild aktualisiert!";
+            $message = "Profile picture updated!";
         }
     }
 }
@@ -78,14 +78,14 @@ if (isset($_POST["delete"])) {
 
     $_SESSION["profile"] = "";
     $currentProfile = "";
-    $message = "Profilbild entfernt!";
+    $message = "Profile picture removed!";
 }
 ?>
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Profil</title>
+    <title>Profile</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -131,33 +131,33 @@ if (isset($_POST["delete"])) {
 <?php include "nav.php"; ?>
 
 <div class="container">
-    <h1>👤 Profil</h1>
+    <h1>👤 Profile</h1>
 
     <?php if ($message): ?>
         <p class="message"><?php echo $message; ?></p>
     <?php endif; ?>
 
-    <p><strong>Benutzername:</strong> <?php echo htmlspecialchars($username); ?></p>
+    <p><strong>Username:</strong> <?php echo htmlspecialchars($username); ?></p>
 
-    <h3>Profilbild:</h3>
+    <h3>Profile Picture:</h3>
 
     <?php if ($currentProfile): ?>
-        <img src="<?php echo $currentProfile; ?>" alt="Profilbild"><br>
+        <img src="<?php echo $currentProfile; ?>" alt="Profile Picture"><br>
 
         <form method="POST">
-            <button class="button" name="delete">Profilbild entfernen</button>
+            <button class="button" name="delete">Remove Profile Picture</button>
         </form>
 
     <?php else: ?>
-        <p>Kein Bild hochgeladen.</p>
+        <p>No picture uploaded.</p>
     <?php endif; ?>
 
     <hr>
 
     <form method="POST" enctype="multipart/form-data">
-        <label>Neues Profilbild hochladen:</label><br><br>
+        <label>Upload new profile picture:</label><br><br>
         <input type="file" name="profile" required><br><br>
-        <button type="submit" class="button">Speichern</button>
+        <button type="submit" class="button">Save</button>
     </form>
 
 </div>

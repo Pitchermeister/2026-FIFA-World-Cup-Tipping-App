@@ -1,39 +1,61 @@
 <?php
-// Logic to handle Test/Clear buttons
+session_start();
+
+// 1. Load Users from file
 $users = [];
+$loggedInUser = $_SESSION['user'] ?? '';
+
+// Check if users.txt exists
+if (file_exists("users.txt")) {
+    $lines = file("users.txt", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    
+    foreach ($lines as $line) {
+        // Format: username|hash|profile_path|role
+        $parts = explode("|", $line);
+        
+        // Safety check for array length
+        if (count($parts) < 4) continue;
+        
+        $username = trim($parts[0]);
+        $profilePic = trim($parts[2]);
+        $role = trim($parts[3]);
+        
+        // 2. Exclude Admins
+        if ($role === 'admin') {
+            continue;
+        }
+        
+        // Add to list
+        $users[] = [
+            'name' => $username,
+            'avatar' => $profilePic
+        ];
+    }
+}
+
+// 3. Logic to handle Test/Clear buttons (Simulate points for REAL users)
 $action = $_POST['action'] ?? 'clear';
 
-// Generate data for 10 users
-for ($i = 1; $i <= 10; $i++) {
-    $user = ['name' => "user_{$i}"];
-    
+// Iterate through the real users we loaded and assign points
+foreach ($users as &$user) {
     if ($action === 'test') {
-        // Randomly determine how many group matches (out of 72) they got "correct" in some way
-        // Let's assume a realistic user gets between 20 and 55 matches right
+        // Random Simulation Logic
         $total_group_correct = rand(20, 55);
-        
-        // Distribute these correct tips across the 3 categories mutually exclusively
-        // (You can't get Exact Score AND Goal Diff for the same match)
         $exact = rand(0, 15);
         $diff  = rand(0, 20);
-        
-        // Remaining correct tips are just "Winner"
-        $winner = $total_group_correct - $exact - $diff;
-        if ($winner < 0) $winner = 0; // Safety cap
+        $winner = max(0, $total_group_correct - $exact - $diff);
 
         $user['exact']  = $exact;
         $user['diff']   = $diff;
         $user['winner'] = $winner;
         
-        // KO Phase Randoms (Max available matches per round)
-        $user['r32']    = rand(0, 16); // Max 16
-        $user['r16']    = rand(0, 8);  // Max 8
-        $user['qf']     = rand(0, 4);  // Max 4
-        $user['sf']     = rand(0, 2);  // Max 2
-        $user['bronze'] = rand(0, 1);  // Max 1
-        $user['champ']  = rand(0, 1);  // Max 1
+        $user['r32']    = rand(0, 16);
+        $user['r16']    = rand(0, 8);
+        $user['qf']     = rand(0, 4);
+        $user['sf']     = rand(0, 2);
+        $user['bronze'] = rand(0, 1);
+        $user['champ']  = rand(0, 1);
         
-        // Calculate Total Points based on multipliers in header
         $user['total'] = ($user['exact'] * 3) + 
                          ($user['diff'] * 2) + 
                          ($user['winner'] * 1) + 
@@ -50,11 +72,10 @@ for ($i = 1; $i <= 10; $i++) {
         $user['sf'] = 0; $user['bronze'] = 0; $user['champ'] = 0;
         $user['total'] = 0;
     }
-    
-    $users[] = $user;
 }
+unset($user); // Break reference
 
-// Sort users by Total Points Descending
+// 4. Sort users by Total Points Descending
 usort($users, function($a, $b) {
     return $b['total'] <=> $a['total'];
 });
@@ -71,14 +92,41 @@ usort($users, function($a, $b) {
     th { text-align: center; vertical-align: middle; background-color: #e9ecef; font-size: 0.9rem; }
     td { text-align: center; vertical-align: middle; }
     
-    /* Username is now the 2nd column, keep it bold/left-aligned */
-    td:nth-child(2) { text-align: left; font-weight: bold; color: #333; }
-    
-    /* Place column (1st) */
-    td:first-child { color: #6c757d; }
+    /* Place column */
+    td:first-child { color: #6c757d; width: 50px; }
 
-    /* Total Points column (Last) */
+    /* User column */
+    td:nth-child(2) { text-align: left; font-weight: bold; color: #333; min-width: 200px; }
+    
+    /* Total Points column */
     td:last-child { font-weight: bold; background-color: #f8f9fa; color: #0d6efd; }
+
+    /* Avatar styling */
+    .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-right: 10px;
+        border: 1px solid #dee2e6;
+        vertical-align: middle;
+    }
+    .user-avatar-placeholder {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: #dee2e6;
+        color: #6c757d;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 10px;
+        font-size: 14px;
+        vertical-align: middle;
+    }
+    
+    /* Highlight logged-in user */
+    .table-warning td:last-child { background-color: #fff3cd; } /* Match Bootstrap warning color */
   </style>
 </head>
 <body>
@@ -95,7 +143,7 @@ usort($users, function($a, $b) {
       <thead class="table-light">
         <tr>
           <th>#</th>
-          <th>Username</th>
+          <th>User</th>
           <th>Exact Score<br><small class="text-muted">(3)</small></th>
           <th>Goal Diff.<br><small class="text-muted">(2)</small></th>
           <th>Winner<br><small class="text-muted">(1)</small></th>
@@ -109,26 +157,43 @@ usort($users, function($a, $b) {
         </tr>
       </thead>
       <tbody>
-        <?php
-        $rank = 1;
-        foreach ($users as $u) {
-            echo "<tr>";
-            echo "<td>{$rank}</td>";
-            echo "<td>{$u['name']}</td>";
-            echo "<td>{$u['exact']}</td>";
-            echo "<td>{$u['diff']}</td>";
-            echo "<td>{$u['winner']}</td>";
-            echo "<td>{$u['r32']}</td>";
-            echo "<td>{$u['r16']}</td>";
-            echo "<td>{$u['qf']}</td>";
-            echo "<td>{$u['sf']}</td>";
-            echo "<td>{$u['bronze']}</td>";
-            echo "<td>{$u['champ']}</td>";
-            echo "<td>{$u['total']}</td>";
-            echo "</tr>";
-            $rank++;
-        }
-        ?>
+        <?php if (empty($users)): ?>
+            <tr><td colspan="12" class="text-center py-4 text-muted">No users found.</td></tr>
+        <?php else: ?>
+            <?php
+            $rank = 1;
+            foreach ($users as $u) {
+                // Highlight row if it matches logged-in user
+                $rowClass = ($u['name'] === $loggedInUser) ? 'table-warning' : '';
+                
+                // Determine Avatar
+                $avatarHtml = "";
+                if (!empty($u['avatar']) && file_exists($u['avatar'])) {
+                    $avatarHtml = '<img src="'.htmlspecialchars($u['avatar']).'" class="user-avatar" alt="Avatar">';
+                } else {
+                    // Placeholder with first letter
+                    $initial = strtoupper(substr($u['name'], 0, 1));
+                    $avatarHtml = '<div class="user-avatar-placeholder">'.$initial.'</div>';
+                }
+
+                echo "<tr class='{$rowClass}'>";
+                echo "<td>{$rank}</td>";
+                echo "<td>{$avatarHtml}" . htmlspecialchars($u['name']) . "</td>";
+                echo "<td>{$u['exact']}</td>";
+                echo "<td>{$u['diff']}</td>";
+                echo "<td>{$u['winner']}</td>";
+                echo "<td>{$u['r32']}</td>";
+                echo "<td>{$u['r16']}</td>";
+                echo "<td>{$u['qf']}</td>";
+                echo "<td>{$u['sf']}</td>";
+                echo "<td>{$u['bronze']}</td>";
+                echo "<td>{$u['champ']}</td>";
+                echo "<td>{$u['total']}</td>";
+                echo "</tr>";
+                $rank++;
+            }
+            ?>
+        <?php endif; ?>
       </tbody>
     </table>
   </div>
@@ -136,7 +201,7 @@ usort($users, function($a, $b) {
   <!-- Debug/Test Controls -->
   <div class="mt-4">
       <form method="post" class="d-flex gap-2">
-          <button type="submit" name="action" value="test" class="btn btn-warning">Test (Random Data)</button>
+          <button type="submit" name="action" value="test" class="btn btn-warning">Test (Simulate Points)</button>
           <button type="submit" name="action" value="clear" class="btn btn-secondary">Clear</button>
       </form>
   </div>

@@ -1,117 +1,134 @@
 <?php
 session_start();
 
-// ✅ Nur Admin erlaubt
+// ✅ Only Admin allowed
 if (!isset($_SESSION["user"]) || $_SESSION["role"] !== "admin") {
     header("Location: home.php");
     exit;
 }
 
-$message = "";
-
-// ✅ matches laden (falls Datei fehlt → erstellen)
-if (!file_exists("matches.txt")) {
-    file_put_contents("matches.txt", "");
-}
-
-$matches = [];
-$raw = file("matches.txt", FILE_IGNORE_NEW_LINES);
-foreach ($raw as $line) {
-    if (trim($line) !== "") {
-        $matches[] = $line;
-    }
-}
-
-// ✅ Änderungen speichern
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-
-    $output = [];
-
-    foreach ($_POST["match"] as $index => $m) {
-        $date   = trim($m["date"]);
-        $time   = trim($m["time"]);
-        $team1  = trim($m["team1"]);
-        $team2  = trim($m["team2"]);
-        $group  = trim($m["group"]);
-
-        if ($date !== "" && $time !== "" && $team1 !== "" && $team2 !== "") {
-            $output[] = "$date|$time|$team1|$team2|$group";
+// ✅ Load Teams for Dropdowns
+$teamsByGroup = [];
+if (file_exists("teams.txt")) {
+    $lines = file("teams.txt", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $parts = explode("|", $line);
+        if (count($parts) >= 2) {
+            $g = $parts[0];
+            $t = $parts[1];
+            $teamsByGroup[$g][] = $t;
         }
     }
-
-    file_put_contents("matches.txt", implode("\n", $output) . "\n");
-
-    $matches = $output;
-    $message = "✅ Spielplan gespeichert!";
 }
+$groupsList = array_keys($teamsByGroup);
+sort($groupsList);
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Turnierplan – Admin</title>
+    <title>Tournament Schedule - Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; background:#f0f0f0; margin:0; }
-        .container {
-            max-width: 900px; margin:20px auto; background:white;
-            padding:30px; border-radius:8px;
-            box-shadow:0 2px 4px rgba(0,0,0,0.1);
-        }
-        table { width:100%; border-collapse:collapse; margin-top:15px; }
-        th, td { padding:10px; border-bottom:1px solid #ddd; }
-        th { background:#e3f2fd; text-align:left; }
-        input { width:120px; padding:5px; }
-        .button {
-            background:#2e7d32; color:white; padding:10px 20px;
-            border:none; border-radius:5px; margin-top:15px; cursor:pointer;
-        }
-        .button:hover { background:#1b5e20; }
-        .msg { color:green; margin-bottom:15px; font-weight:bold; }
+        body { background-color: #f8f9fa; }
+        .container { max-width: 1000px; }
+        .form-section { background: white; padding: 25px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     </style>
 </head>
 <body>
 
-<?php include "nav.php"; ?>
+<div class="container my-5">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>🏟️ Tournament Schedule (Admin)</h2>
+        <a href="home.php" class="btn btn-primary btn-sm px-3">Home</a>
+    </div>
 
-<div class="container">
-    <h1>🏟️ Turnierplan (Admin)</h1>
+    <?php include "nav.php"; ?>
 
-    <?php if ($message): ?>
-        <p class="msg"><?php echo $message; ?></p>
-    <?php endif; ?>
+    <!-- 1. Add Match Form (Single Row) -->
+    <div class="form-section mb-5">
+        <h4 class="mb-4 text-success">Add New Match</h4>
+        <form method="POST">
+            <div class="row g-3 align-items-end">
+                
+                <!-- Date -->
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Date</label>
+                    <input type="date" name="date" class="form-control" required>
+                </div>
 
-    <?php if (empty($matches)): ?>
-        <p>Noch keine Spiele eingetragen.</p>
-    <?php else: ?>
+                <!-- Time -->
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Time</label>
+                    <input type="time" name="time" class="form-control" required>
+                </div>
 
-    <form method="POST">
-        <table>
-            <tr>
-                <th>Datum</th>
-                <th>Uhrzeit</th>
-                <th>Team 1</th>
-                <th>Team 2</th>
-                <th>Gruppe</th>
-            </tr>
+                <!-- Group -->
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Group</label>
+                    <select class="form-select" name="group" id="groupSelect" required>
+                        <option value="">Select...</option>
+                        <?php foreach ($groupsList as $g): ?>
+                            <option value="<?php echo $g; ?>">Group <?php echo $g; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
 
-            <?php foreach ($matches as $i => $line): ?>
-                <?php $m = explode("|", $line); ?>
+                <!-- Team 1 -->
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Team 1</label>
+                    <select class="form-select team-select" name="team1" required disabled>
+                        <option value="">Select Group First</option>
+                    </select>
+                </div>
 
-                <tr>
-                    <td><input name="match[<?php echo $i; ?>][date]" value="<?php echo $m[0]; ?>"></td>
-                    <td><input name="match[<?php echo $i; ?>][time]" value="<?php echo $m[1]; ?>"></td>
-                    <td><input name="match[<?php echo $i; ?>][team1]" value="<?php echo $m[2]; ?>"></td>
-                    <td><input name="match[<?php echo $i; ?>][team2]" value="<?php echo $m[3]; ?>"></td>
-                    <td><input name="match[<?php echo $i; ?>][group]" value="<?php echo $m[4] ?? ""; ?>"></td>
-                </tr>
-            <?php endforeach; ?>
-        </table>
+                <!-- Team 2 -->
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Team 2</label>
+                    <select class="form-select team-select" name="team2" required disabled>
+                        <option value="">Select Group First</option>
+                    </select>
+                </div>
 
-        <button class="button" type="submit">Speichern</button>
-    </form>
+                <!-- Submit -->
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-success w-100 fw-bold">Add Match</button>
+                </div>
+            </div>
+        </form>
+    </div>
 
-    <?php endif; ?>
 </div>
 
+<!-- JavaScript to filter teams based on Group selection -->
+<script>
+    const teamsByGroup = <?php echo json_encode($teamsByGroup); ?>;
+    const groupSelect = document.getElementById('groupSelect');
+    const teamSelects = document.querySelectorAll('.team-select');
+
+    groupSelect.addEventListener('change', function() {
+        const group = this.value;
+        const teams = teamsByGroup[group] || [];
+
+        teamSelects.forEach(select => {
+            select.innerHTML = '<option value="">Select Team...</option>';
+            if (group) {
+                select.disabled = false;
+                teams.forEach(team => {
+                    const option = document.createElement('option');
+                    option.value = team;
+                    option.textContent = team;
+                    select.appendChild(option);
+                });
+            } else {
+                select.disabled = true;
+                select.innerHTML = '<option value="">Select Group First</option>';
+            }
+        });
+    });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

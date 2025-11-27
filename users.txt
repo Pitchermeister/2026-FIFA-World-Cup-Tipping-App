@@ -1,2 +1,6 @@
 admin|$2b$12$V74sY6xJADvCxkdQl3iBiuTAcg8lU05LPTR/6nwiIaf9aRJCwwqU.||admin
 test|$2b$12$E2UkIdObG955NWRBUqLAD.BvnhSMK.MpCfE.o.DjdKQt4RTjd.bly||user
+asd|$2y$10$nkjoZ7M0vPcSgIdwy3IdGexxsTLBbbzDhmcyL.GbO1TqTf74tB2xm|uploads/asd.jpg|user
+user_1|$2y$10$CAwFFdN/1qKBherCNzzTwelPiE8s.NjgFLjVCGW9f5sJs50lGgDMu||user
+user_2|$2y$10$L.KBZFBoINfQ8.2W8VanjOqyvS085uEnlNFnY0ED1OUq8FallxnZ.||user
+user_3|$2y$10$AB0jqoBfkimgvzOkeNUbYu16VU9E6/nrZemspcEAquNRRsq7ulCtK||user

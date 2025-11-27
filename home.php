@@ -5,7 +5,7 @@ session_start();
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Home - WM 2026 Tippspiel</title>
+    <title>Home - FIFA WC 2026 Tipping Game</title>
     <style>
         body { font-family: Arial; background-color: #f0f0f0; margin: 0; }
         .container {
@@ -20,6 +20,10 @@ session_start();
             margin-top: 10px;
         }
         a.button:hover { background: #1b5e20; }
+        
+        /* Blue buttons for Admin to distinguish them */
+        a.button.admin { background: #1565c0; }
+        a.button.admin:hover { background: #0d47a1; }
     </style>
 </head>
 <body>
@@ -27,19 +31,46 @@ session_start();
 <?php include "nav.php"; ?>
 
 <div class="container">
-    <h1>🏆 FIFA WM 2026 Tippspiel</h1>
+    <h1>🏆 FIFA WC 2026 Tipping Game</h1>
 
+    <!-- 1. Check if ANY user is logged in -->
     <?php if (isset($_SESSION["user"])): ?>
-        <p>Willkommen zurück, <strong><?php echo htmlspecialchars($_SESSION["user"]); ?></strong>!</p>
+        
+        <p>Welcome back, <strong><?php echo htmlspecialchars($_SESSION["user"]); ?></strong>!</p>
 
-        <a href="predictions.php" class="button">⚽ Tipps abgeben</a>
-        <a href="mytips.php" class="button">📋 Meine Tipps</a>
-        <a href="standings.php" class="button">🏆 Rangliste</a>
+        <!-- 2. CHECK ROLE: Is this user an Admin? -->
+        <?php if (isset($_SESSION["role"]) && $_SESSION["role"] === "admin"): ?>
+            
+            <hr>
+            <h3>Admin Dashboard</h3>
+            <p>You have administrative privileges.</p>
+            <a href="update_results.php" class="button admin">📊 Update Results</a>
+            <a href="tournament_schedule.php" class="button admin">🏟️ Manage Schedule</a>
+            <a href="teamsetup.php" class="button admin">⚙️ Manage Teams</a>
 
+        <!-- 3. If logged in but NOT admin (Regular User) -->
+        <?php else: ?>
+            
+            <!-- Check if user has FINISHED predictions (Winner of Match 104 is set) -->
+
+            <?php if (isset($_SESSION['saved_post']['winner_104']) && $_SESSION['saved_post']['winner_104'] !== ""): ?>
+                <!-- Finished -> Show My Tips -->
+                <a href="mytips.php" class="button">📋 My Predictions</a>
+            <?php else: ?>
+                <!-- Not finished (or not started) -> Show Submit/Resume Button -->
+                <a href="predictions.php" class="button">⚽ Submit Predictions</a>
+            <?php endif; ?>
+            
+            <a href="standings.php" class="button">🏆 Standings</a>
+            
+        <?php endif; ?>
+
+    <!-- 4. Not logged in at all (Guest) -->
     <?php else: ?>
-        <p>Tippe alle Spiele der WM 2026 und sammle Punkte!</p>
+        <p>Predict all WC 2026 matches and collect points!</p>
         <a href="login.php" class="button">🔐 Login</a>
-        <a href="register.php" class="button">📝 Registrieren</a>
+        <a href="register.php" class="button">📝 Register</a>
+        <a href="standings.php" class="button">🏆 Standings</a>
     <?php endif; ?>
 </div>
 

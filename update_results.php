@@ -41,7 +41,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     file_put_contents("results.txt", implode("\n", $output) . "\n");
 
-    $message = "Ergebnisse gespeichert!";
+    $message = "Results saved!";
     $results = $output;
 }
 ?>
@@ -49,7 +49,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Ergebnisse – Admin</title>
+    <title>Results – Admin</title>
     <style>
         body { font-family: Arial, sans-serif; background:#f0f0f0; margin:0; }
         .container {
@@ -74,21 +74,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <?php include "nav.php"; ?>
 
 <div class="container">
-    <h1>📊 Ergebnisse eintragen (Admin)</h1>
+    <h1>📊 Enter Results (Admin)</h1>
 
     <?php if ($message): ?>
         <p class="msg"><?php echo $message; ?></p>
     <?php endif; ?>
 
     <?php if (empty($matches)): ?>
-        <p>Noch keine Spiele vorhanden.</p>
+        <p>No matches available yet.</p>
     <?php else: ?>
 
     <form method="POST">
         <table>
             <tr>
-                <th>Spiel</th>
-                <th>Endstand (H - A)</th>
+                <th>Match</th>
+                <th>Final Score (H - A)</th>
                 <th>Status</th>
             </tr>
 
@@ -114,13 +114,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     </td>
 
                     <td class="<?php echo $done ? 'done' : ''; ?>">
-                        <?php echo $done ? "✅ gespeichert" : "—"; ?>
+                        <?php echo $done ? "✅ saved" : "—"; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>
         </table>
 
-        <button class="button" type="submit">Speichern</button>
+        <button class="button" type="submit">Save</button>
     </form>
 
     <?php endif; ?>

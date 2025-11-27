@@ -18,7 +18,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         foreach ($users as $line) {
             $p = explode("|", $line);
             if ($p[0] === $username) {
-                $message = "Benutzer existiert bereits!";
+                $message = "User already exists!";
             }
         }
 
@@ -36,7 +36,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
 
     } else {
-        $message = "Alle Felder müssen ausgefüllt sein!";
+        $message = "All fields must be filled!";
     }
 }
 ?>
@@ -44,13 +44,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Registrieren</title>
+    <title>Register</title>
 </head>
 <body>
 
 <?php include "nav.php"; ?>
 
-<h2>Registrieren</h2>
+<h2>Register</h2>
 
 <p style="color:red;"><?php echo $message; ?></p>
 
@@ -58,10 +58,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <label>Username:</label><br>
     <input name="username"><br><br>
 
-    <label>Passwort:</label><br>
+    <label>Password:</label><br>
     <input type="password" name="password"><br><br>
 
-    <button type="submit">Account erstellen</button>
+    <button type="submit">Create Account</button>
 </form>
 
 </body>

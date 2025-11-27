@@ -1,0 +1,48 @@
+A|Mexico
+A|Jordan
+A|Egypt
+B|Canada
+B|Morocco
+B|Austria
+B|Ghana
+C|Spain
+C|ITA/NIR/WAL/BIH
+C|TUR/ROU/SVK/KOS
+C|Uzbekistan
+D|USA
+D|Algeria
+D|Colombia
+D|New-Zealand
+E|Argentina
+E|Uruguay
+E|Australia
+E|Qatar
+F|France
+F|Switzerland
+F|UKR/SWE/POL/ALB
+G|England
+G|Japan
+G|Norway
+G|IRQ/BOL/SUR
+H|Brazil
+H|Senegal
+H|Panama
+H|Saudi Arabia
+I|Portugal
+I|Iran
+I|Scotland
+I|South Africa
+J|Netherlands
+J|DEN/MKD/CZE/IRL
+J|Paraguay
+J|Cabo Verde
+K|Belgium
+K|South Korea
+K|Tunisia
+K|Curaçao
+L|Germany
+L|Ecuador
+L|Côte d'Ivoire
+L|Haiti
+A|Croatia
+F|COD/NCL/JAM

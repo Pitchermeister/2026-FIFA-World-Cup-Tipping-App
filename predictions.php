@@ -1,146 +1,53 @@
 <?php
 session_start();
 
-// === Define groups and matches ===
-$groups = [
-  "A" => [
-    "teams" => ["Mexico", "Croatia", "Jordan", "Egypt"],
-    "matches" => [
-      ["home" => "Mexico", "away" => "Croatia"],
-      ["home" => "Jordan", "away" => "Egypt"],
-      ["home" => "Mexico", "away" => "Jordan"],
-      ["home" => "Croatia", "away" => "Egypt"],
-      ["home" => "Mexico", "away" => "Egypt"],
-      ["home" => "Croatia", "away" => "Jordan"]
-    ]
-  ],
-  "B" => [
-    "teams" => ["Canada", "Morocco", "Austria", "Ghana"],
-    "matches" => [
-      ["home" => "Canada", "away" => "Morocco"],
-      ["home" => "Austria", "away" => "Ghana"],
-      ["home" => "Canada", "away" => "Austria"],
-      ["home" => "Morocco", "away" => "Ghana"],
-      ["home" => "Canada", "away" => "Ghana"],
-      ["home" => "Morocco", "away" => "Austria"]
-    ]
-    ],
-  "C" => [
-    "teams" => ["Spain", "ITA/NIR/WAL/BIH", "TUR/ROU/SVK/KOS", "Uzbekistan"],
-    "matches" => [
-      ["home" => "Spain", "away" => "ITA/NIR/WAL/BIH"],
-      ["home" => "TUR/ROU/SVK/KOS", "away" => "Uzbekistan"],
-      ["home" => "ITA/NIR/WAL/BIH", "away" => "Uzbekistan"],
-      ["home" => "Spain", "away" => "TUR/ROU/SVK/KOS"],
-      ["home" => "ITA/NIR/WAL/BIH", "away" => "TUR/ROU/SVK/KOS"],
-      ["home" => "Uzbekistan", "away" => "Spain"]
-    ]
-    ],
-  "D" => [
-    "teams" => ["USA", "Algeria", "Colombia", "New-Zealand"],
-    "matches" => [
-      ["home" => "USA", "away" => "Algeria"],
-      ["home" => "Colombia", "away" => "New-Zealand"],
-      ["home" => "Algeria", "away" => "Colombia"],
-      ["home" => "USA", "away" => "New-Zealand"],
-      ["home" => "New-Zealand", "away" => "Algeria"],
-      ["home" => "Colombia", "away" => "USA"]
-    ]
-    ],
-    "E" => [
-    "teams" => ["Argentina", "Uruguay", "Australia", "Qatar"],
-    "matches" => [
-      ["home" => "Argentina", "away" => "Uruguay"],
-      ["home" => "Australia", "away" => "Qatar"],
-      ["home" => "Uruguay", "away" => "Qatar"],
-      ["home" => "Argentina", "away" => "Australia"],
-      ["home" => "Uruguay", "away" => "Australia"],
-      ["home" => "Qatar", "away" => "Argentina"]
-    ]
-    ],
-    "F" => [
-    "teams" => ["France", "Switzerland", "UKR/SWE/POL/ALB", "COD/JAM/NCL"],
-    "matches" => [
-      ["home" => "France", "away" => "Switzerland"],
-      ["home" => "UKR/SWE/POL/ALB", "away" => "COD/JAM/NCL"],
-      ["home" => "Switzerland", "away" => "COD/JAM/NCL"],
-      ["home" => "France", "away" => "UKR/SWE/POL/ALB"],
-      ["home" => "Switzerland", "away" => "UKR/SWE/POL/ALB"],
-      ["home" => "COD/JAM/NCL", "away" => "France"]
-    ]
-    ],
-    "G" => [
-    "teams" => ["England", "Japan", "Norway", "IRQ/BOL/SUR"],
-    "matches" => [
-      ["home" => "England", "away" => "Japan"],
-      ["home" => "Norway", "away" => "IRQ/BOL/SUR"],
-      ["home" => "Japan", "away" => "IRQ/BOL/SUR"],
-      ["home" => "England", "away" => "Norway"],
-      ["home" => "Japan", "away" => "Norway"],
-      ["home" => "IRQ/BOL/SUR", "away" => "England"]
-    ]
-    ],
-    "H" => [
-    "teams" => ["Brazil", "Senegal", "Panama", "Saudi Arabia"],
-    "matches" => [
-      ["home" => "Brazil", "away" => "Senegal"],
-      ["home" => "Panama", "away" => "Saudi Arabia"],
-      ["home" => "Senegal", "away" => "Saudi Arabia"],
-      ["home" => "Brazil", "away" => "Panama"],
-      ["home" => "Senegal", "away" => "Panama"],
-      ["home" => "Saudi Arabia", "away" => "Brazil"]
-    ]
-    ],
-    "I" => [
-    "teams" => ["Portugal", "Iran", "Scotland", "South Africa"],
-    "matches" => [
-      ["home" => "Portugal", "away" => "Iran"],
-      ["home" => "Scotland", "away" => "South Africa"],
-      ["home" => "Iran", "away" => "South Africa"],
-      ["home" => "Portugal", "away" => "Scotland"],
-      ["home" => "Iran", "away" => "Scotland"],
-      ["home" => "South Africa", "away" => "Portugal"]
-    ]
-    ],
-    "J" => [
-    "teams" => ["Netherlands", "DEN/MKD/CZE/IRL", "Paraguay", "Cabo Verde"],
-    "matches" => [
-      ["home" => "Netherlands", "away" => "DEN/MKD/CZE/IRL"],
-      ["home" => "Paraguay", "away" => "Cabo Verde"],
-      ["home" => "DEN/MKD/CZE/IRL", "away" => "Cabo Verde"],
-      ["home" => "Netherlands", "away" => "Paraguay"],
-      ["home" => "DEN/MKD/CZE/IRL", "away" => "Paraguay"],
-      ["home" => "Cabo Verde", "away" => "Netherlands"]
-    ]
-    ],
-    "K" => [
-    "teams" => ["Belgium", "South Korea", "Tunisia", "Curaçao"],
-    "matches" => [
-      ["home" => "Belgium", "away" => "South Korea"],
-      ["home" => "Tunisia", "away" => "Curaçao"],
-      ["home" => "South Korea", "away" => "Curaçao"],
-      ["home" => "Belgium", "away" => "Tunisia"],
-      ["home" => "South Korea", "away" => "Tunisia"],
-      ["home" => "Curaçao", "away" => "Belgium"]
-    ]
-    ],
-    "L" => [
-    "teams" => ["Germany", "Ecuador", "Côte d'Ivoire", "Haiti"],
-    "matches" => [
-      ["home" => "Germany", "away" => "Ecuador"],
-      ["home" => "Côte d'Ivoire", "away" => "Haiti"],
-      ["home" => "Ecuador", "away" => "Haiti"],
-      ["home" => "Germany", "away" => "Côte d'Ivoire"],
-      ["home" => "Ecuador", "away" => "Côte d'Ivoire"],
-      ["home" => "Haiti", "away" => "Germany"]
-    ]
-    ]
-];
+// === 1. Load Groups and Teams from teams.txt ===
+$groups = [];
+$teamsFile = "teams.txt";
 
-// Handle form submission
+if (file_exists($teamsFile)) {
+    $lines = file($teamsFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $parts = explode("|", $line);
+        if (count($parts) >= 2) {
+            $g = trim($parts[0]);
+            $t = trim($parts[1]);
+            
+            // Initialize group if not exists
+            if (!isset($groups[$g])) {
+                $groups[$g] = [
+                    "teams" => [],
+                    "matches" => []
+                ];
+            }
+            // Add team
+            $groups[$g]["teams"][] = $t;
+        }
+    }
+}
+
+// === 2. Generate Matches Dynamically ===
+// Pattern: 0v1, 2v3, 0v2, 1v3, 0v3, 1v2
+foreach ($groups as $gName => &$gData) {
+    $t = $gData['teams'];
+    // Only generate matches if we have 4 teams
+    if (count($t) >= 4) {
+        $gData['matches'] = [
+            ["home" => $t[0], "away" => $t[1]],
+            ["home" => $t[2], "away" => $t[3]],
+            ["home" => $t[0], "away" => $t[2]],
+            ["home" => $t[1], "away" => $t[3]],
+            ["home" => $t[0], "away" => $t[3]],
+            ["home" => $t[1], "away" => $t[2]]
+        ];
+    }
+}
+unset($gData); // break reference
+
+// === 3. Handle form submission ===
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    // 1. Initialize data structures
+    // Initialize data structures
     $standings_all = [];
     foreach ($groups as $gName => $gdata) {
         foreach ($gdata['teams'] as $team) {
@@ -148,7 +55,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
     }
 
-    // 2. Process all matches and calculate points
+    // Process all matches and calculate points
     foreach ($groups as $gName => $gdata) {
         foreach ($gdata['matches'] as $i => $m) {
             $homeKey = "{$gName}_home_$i";
@@ -190,7 +97,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         });
     }
 
-    // 3. Extract Winners (THIS MUST BE OUTSIDE THE LOOP ABOVE)
+    // Extract Winners
     $group_winners = [];
     $group_runners = [];
     $group_third = [];
@@ -233,7 +140,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <body>
 
 <div class="container my-5">
-  <h1 class="text-center mb-4">Predictions</h1>
+  
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="text-center mb-0">Predictions</h1>
+    <a href="home.php" class="btn btn-outline-secondary btn-sm">Home</a>
+  </div>
+
+  <?php if (empty($groups)): ?>
+      <div class="alert alert-warning text-center">
+        No teams found! Please ask the Admin to setup teams in the Admin Panel.
+      </div>
+  <?php else: ?>
 
   <form method="post">
     <?php 
@@ -258,38 +175,40 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <tbody>
             <?php
               $id = 0;
-              foreach ($gdata['matches'] as $m) {
-                $date = date("Y-m-d", strtotime("+$id days"));
-                $time = sprintf("%02d:%02d", rand(14,22), "00");
+              // Ensure we have matches generated
+              if (isset($gdata['matches']) && count($gdata['matches']) > 0) {
+                  foreach ($gdata['matches'] as $m) {
+                    $date = date("Y-m-d", strtotime("+$id days"));
+                    $time = sprintf("%02d:%02d", rand(14,22), "00");
 
-                $homeName = "{$gName}_home_$id";
-                $awayName = "{$gName}_away_$id";
+                    $homeName = "{$gName}_home_$id";
+                    $awayName = "{$gName}_away_$id";
 
-                // Retrieve value from Saved Session data (or POST if submitting failed)
-                $homeVal = $savedData[$homeName] ?? ($_POST[$homeName] ?? '');
-                $awayVal = $savedData[$awayName] ?? ($_POST[$awayName] ?? '');
-                
-                $resultText = "–";
-                
-                // Pure PHP Rendering for result column
-                // This will only show if data exists (e.g. after coming back from KO phase)
-                if ($homeVal !== '' && $awayVal !== '') {
-                  $h = (int)$homeVal; $a = (int)$awayVal;
-                  if ($h > $a) $resultText = $m['home'];
-                  elseif ($h < $a) $resultText = $m['away'];
-                  else $resultText = "Draw";
-                }
+                    $homeVal = $savedData[$homeName] ?? ($_POST[$homeName] ?? '');
+                    $awayVal = $savedData[$awayName] ?? ($_POST[$awayName] ?? '');
+                    
+                    $resultText = "–";
+                    
+                    if ($homeVal !== '' && $awayVal !== '') {
+                      $h = (int)$homeVal; $a = (int)$awayVal;
+                      if ($h > $a) $resultText = $m['home'];
+                      elseif ($h < $a) $resultText = $m['away'];
+                      else $resultText = "Draw";
+                    }
 
-                echo "<tr>
-                        <td>" . ($id + 1) . "</td>
-                        <td>$date $time</td>
-                        <td class='team-home'>{$m['home']}</td>
-                        <td class='team-away'>{$m['away']}</td>
-                        <td><input type='number' class='form-control' name='$homeName' min='0' max='9' value='".htmlspecialchars($homeVal)."'></td>
-                        <td><input type='number' class='form-control' name='$awayName' min='0' max='9' value='".htmlspecialchars($awayVal)."'></td>
-                        <td class='result-cell'>".htmlspecialchars($resultText)."</td>
-                      </tr>";
-                $id++;
+                    echo "<tr>
+                            <td>" . ($id + 1) . "</td>
+                            <td>$date $time</td>
+                            <td class='team-home'>{$m['home']}</td>
+                            <td class='team-away'>{$m['away']}</td>
+                            <td><input type='number' class='form-control' name='$homeName' min='0' max='9' value='".htmlspecialchars($homeVal)."'></td>
+                            <td><input type='number' class='form-control' name='$awayName' min='0' max='9' value='".htmlspecialchars($awayVal)."'></td>
+                            <td class='result-cell'>".htmlspecialchars($resultText)."</td>
+                          </tr>";
+                    $id++;
+                  }
+              } else {
+                  echo "<tr><td colspan='7'>Not enough teams to generate matches.</td></tr>";
               }
             ?>
           </tbody>
@@ -302,6 +221,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <button type="submit" class="btn btn-primary px-4" disabled>Save & Show Standings</button>
     </div>
   </form>
+
+  <?php endif; ?>
 </div>
 
 <script>
@@ -312,6 +233,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Helper: check all score inputs to enable save button
   function checkAllFilled() {
+    if(scoreInputs.length === 0) return;
     const allFilled = Array.from(scoreInputs).every(i => i.value !== '' && i.value !== null);
     if (saveBtn) saveBtn.disabled = !allFilled;
   }
