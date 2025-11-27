@@ -218,7 +218,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     <div class="text-center mt-4">
       <button type="button" id="fillRandom" class="btn btn-warning me-2">Fill Random Scores</button>
-      <button type="submit" class="btn btn-primary px-4" disabled>Save & Show Standings</button>
+      <button type="submit" class="btn btn-primary px-4" disabled>Save & Proceed to KO Phase</button>
     </div>
   </form>
 
