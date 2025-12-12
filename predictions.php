@@ -26,7 +26,42 @@ if (file_exists($teamsFile)) {
     }
 }
 
-// === 2. Generate Matches Dynamically ===
+// === 2. Load Schedule from matches.txt ===
+$schedule = [];
+// Default opening date if file doesn't exist or is empty (e.g. WC 2026 Start)
+$openingDateTimestamp = strtotime("2026-06-11"); 
+
+if (file_exists("matches.txt")) {
+    $rawMatches = file("matches.txt", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    $foundDates = [];
+
+    foreach ($rawMatches as $line) {
+        $parts = explode("|", $line);
+        // Format: Date|Time|Team1|Team2|Group
+        if (count($parts) >= 4) {
+            $mDate = trim($parts[0]);
+            $mTime = trim($parts[1]);
+            $mT1   = trim($parts[2]);
+            $mT2   = trim($parts[3]);
+
+            // Create lookup keys (store both directions to be safe)
+            $schedule["$mT1|$mT2"] = ['date' => $mDate, 'time' => $mTime];
+            $schedule["$mT2|$mT1"] = ['date' => $mDate, 'time' => $mTime];
+
+            // Collect timestamp to find the "Opening Match"
+            if ($ts = strtotime($mDate)) {
+                $foundDates[] = $ts;
+            }
+        }
+    }
+
+    // If we found any dates, update the opening date to the earliest one found
+    if (!empty($foundDates)) {
+        $openingDateTimestamp = min($foundDates);
+    }
+}
+
+// === 3. Generate Matches Dynamically ===
 // Pattern: 0v1, 2v3, 0v2, 1v3, 0v3, 1v2
 foreach ($groups as $gName => &$gData) {
     $t = $gData['teams'];
@@ -44,7 +79,7 @@ foreach ($groups as $gName => &$gData) {
 }
 unset($gData); // break reference
 
-// === 3. Handle form submission ===
+// === 4. Handle form submission ===
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     // Initialize data structures
@@ -178,8 +213,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               // Ensure we have matches generated
               if (isset($gdata['matches']) && count($gdata['matches']) > 0) {
                   foreach ($gdata['matches'] as $m) {
-                    $date = date("Y-m-d", strtotime("+$id days"));
-                    $time = sprintf("%02d:%02d", rand(14,22), "00");
+                    
+                    // --- DATE & TIME LOGIC ---
+                    $matchKey = "{$m['home']}|{$m['away']}";
+                    
+                    if (isset($schedule[$matchKey])) {
+                        // Found in matches.txt
+                        $date = $schedule[$matchKey]['date'];
+                        $time = $schedule[$matchKey]['time'];
+                    } else {
+                        // Not found: Fallback Logic
+                        // Opening Match + rand(1, 20) days
+                        $randomDays = rand(1, 20);
+                        $date = date("Y-m-d", strtotime("+$randomDays days", $openingDateTimestamp));
+                        // Hour rand(0, 23), Minute 00
+                        $time = sprintf("%02d:00", rand(0, 23));
+                    }
+                    // -------------------------
 
                     $homeName = "{$gName}_home_$id";
                     $awayName = "{$gName}_away_$id";
@@ -218,7 +268,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     <div class="text-center mt-4">
       <button type="button" id="fillRandom" class="btn btn-warning me-2">Fill Random Scores</button>
-      <button type="submit" class="btn btn-primary px-4" disabled>Save & Proceed to KO Phase</button>
+      <button type="submit" class="btn btn-primary px-4" disabled>Save & Proceed to Knockout Phase</button>
     </div>
   </form>
 

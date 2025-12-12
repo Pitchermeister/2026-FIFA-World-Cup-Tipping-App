@@ -7,6 +7,37 @@ if (!isset($_SESSION["user"]) || $_SESSION["role"] !== "admin") {
     exit;
 }
 
+$message = "";
+$msgType = "";
+
+// ✅ Handle Form Submission (Save Match)
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $date   = $_POST['date'] ?? '';
+    $time   = $_POST['time'] ?? '';
+    $group  = $_POST['group'] ?? '';
+    $team1  = $_POST['team1'] ?? '';
+    $team2  = $_POST['team2'] ?? '';
+
+    if ($date && $time && $group && $team1 && $team2) {
+        if ($team1 === $team2) {
+            $message = "Error: A team cannot play against itself!";
+            $msgType = "danger";
+        } else {
+            // Format: Date|Time|Team1|Team2|Group
+            $line = "$date|$time|$team1|$team2|$group\n";
+            
+            // Append to matches.txt
+            file_put_contents("matches.txt", $line, FILE_APPEND);
+            
+            $message = "Match added successfully: $team1 vs $team2";
+            $msgType = "success";
+        }
+    } else {
+        $message = "Please fill in all fields.";
+        $msgType = "warning";
+    }
+}
+
 // ✅ Load Teams for Dropdowns
 $teamsByGroup = [];
 if (file_exists("teams.txt")) {
@@ -45,6 +76,14 @@ sort($groupsList);
     </div>
 
     <?php include "nav.php"; ?>
+
+    <!-- Message Alert -->
+    <?php if ($message): ?>
+        <div class="alert alert-<?php echo $msgType; ?> alert-dismissible fade show mb-4" role="alert">
+            <?php echo htmlspecialchars($message); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
 
     <!-- 1. Add Match Form (Single Row) -->
     <div class="form-section mb-5">
@@ -112,7 +151,9 @@ sort($groupsList);
         const teams = teamsByGroup[group] || [];
 
         teamSelects.forEach(select => {
+            // Reset options
             select.innerHTML = '<option value="">Select Team...</option>';
+            
             if (group) {
                 select.disabled = false;
                 teams.forEach(team => {
