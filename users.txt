@@ -4,3 +4,4 @@ asd|$2y$10$nkjoZ7M0vPcSgIdwy3IdGexxsTLBbbzDhmcyL.GbO1TqTf74tB2xm||user
 user_1|$2y$10$CAwFFdN/1qKBherCNzzTwelPiE8s.NjgFLjVCGW9f5sJs50lGgDMu||user
 user_2|$2y$10$L.KBZFBoINfQ8.2W8VanjOqyvS085uEnlNFnY0ED1OUq8FallxnZ.||user
 user_3|$2y$10$AB0jqoBfkimgvzOkeNUbYu16VU9E6/nrZemspcEAquNRRsq7ulCtK||user
+user_0|$2y$10$cQZ6kjAFnfNJYp.K.mcPpeEmY0p16Z90ubQMCrE7W9QeMrXvpCT/u||user
