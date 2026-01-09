@@ -1,2 +1,12 @@
-uploads/asd.jpg
+db_config.php
+uploads/
 users.txt
+teams.txt
+matches.txt
+results.txt
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+.idea/
+.vscode/

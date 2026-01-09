@@ -1,166 +1,118 @@
 <?php
 session_start();
+require_once 'db_config.php';
 
-if (!isset($_SESSION["user"])) {
+// Check if logged in
+if (!isset($_SESSION["user"]) || !isset($_SESSION["user_id"])) {
     header("Location: login.php");
-    exit;
+    exit();
 }
 
+$user_id = $_SESSION["user_id"];
 $message = "";
-$username = $_SESSION["user"];
-$currentProfile = $_SESSION["profile"] ?? "";
 
-// users.txt laden
-$users = file("users.txt", FILE_IGNORE_NEW_LINES);
-
-// Profilbild ändern
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["profile"])) {
-
-    $file = $_FILES["profile"];
-
+// Handle profile picture upload
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["profile_pic"])) {
+    $file = $_FILES["profile_pic"];
+    
     if ($file["error"] === 0) {
-
-        $allowed = ["image/jpeg", "image/png", "image/jpg"];
-        $maxSize = 5 * 1024 * 1024; // 5MB
-
-        if (!in_array($file["type"], $allowed)) {
-            $message = "Only JPG or PNG allowed!";
-        }
-        elseif ($file["size"] > $maxSize) {
-            $message = "File must be max. 5MB!";
-        } else {
-            $ext = pathinfo($file["name"], PATHINFO_EXTENSION);
-            $newName = "uploads/" . $username . "." . $ext;
-
+        $allowed = ["jpg", "jpeg", "png"];
+        $ext = strtolower(pathinfo($file["name"], PATHINFO_EXTENSION));
+        
+        if (in_array($ext, $allowed) && $file["size"] <= 5000000) {
+            // Create uploads directory if not exists
             if (!is_dir("uploads")) {
-                mkdir("uploads");
+                mkdir("uploads", 0777, true);
             }
-
-            move_uploaded_file($file["tmp_name"], $newName);
-
-            // users.txt aktualisieren
-            foreach ($users as $i => $line) {
-                $p = explode("|", $line);
-                if ($p[0] === $username) {
-                    $p[2] = $newName;
-                    $users[$i] = implode("|", $p);
-                    break;
-                }
+            
+            $filename = "profile_" . $user_id . "." . $ext;
+            $filepath = "uploads/" . $filename;
+            
+            if (move_uploaded_file($file["tmp_name"], $filepath)) {
+                // Update database
+                $conn = get_db();
+                $stmt = $conn->prepare("UPDATE users SET profile_pic = ? WHERE id = ?");
+                $stmt->bind_param("si", $filepath, $user_id);
+                $stmt->execute();
+                $stmt->close();
+                $conn->close();
+                
+                $_SESSION["profile_pic"] = $filepath;
+                $message = "Profile picture uploaded!";
+            } else {
+                $message = "Upload failed!";
             }
-
-            file_put_contents("users.txt", implode("\n", $users) . "\n");
-
-            $_SESSION["profile"] = $newName;
-            $currentProfile = $newName;
-
-            $message = "Profile picture updated!";
+        } else {
+            $message = "Invalid file type or size!";
         }
     }
 }
 
-// Profilbild löschen
-if (isset($_POST["delete"])) {
-
-    if ($currentProfile && file_exists($currentProfile)) {
-        unlink($currentProfile);
-    }
-
-    foreach ($users as $i => $line) {
-        $p = explode("|", $line);
-        if ($p[0] === $username) {
-            $p[2] = "";
-            $users[$i] = implode("|", $p);
-            break;
-        }
-    }
-
-    file_put_contents("users.txt", implode("\n", $users) . "\n");
-
-    $_SESSION["profile"] = "";
-    $currentProfile = "";
-    $message = "Profile picture removed!";
+// Handle delete picture
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["delete_pic"])) {
+    $conn = get_db();
+    $stmt = $conn->prepare("UPDATE users SET profile_pic = NULL WHERE id = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $stmt->close();
+    $conn->close();
+    
+    $_SESSION["profile_pic"] = null;
+    $message = "Profile picture deleted!";
 }
+
+// Get user info
+$conn = get_db();
+$stmt = $conn->prepare("SELECT username, profile_pic, role, created_at FROM users WHERE id = ?");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+$user_data = $result->fetch_assoc();
+$stmt->close();
+$conn->close();
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Profile</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 600px;
-            margin: 20px auto;
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #2e7d32;
-        }
-        .message {
-            color: red;
-            margin-bottom: 15px;
-        }
-        img {
-            max-width: 200px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-        }
-        .button {
-            background: #2e7d32;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .button:hover {
-            background: #1b5e20;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - FIFA WC 2026</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-
-<?php include "nav.php"; ?>
-
-<div class="container">
-    <h1>👤 Profile</h1>
-
-    <?php if ($message): ?>
-        <p class="message"><?php echo $message; ?></p>
-    <?php endif; ?>
-
-    <p><strong>Username:</strong> <?php echo htmlspecialchars($username); ?></p>
-
-    <h3>Profile Picture:</h3>
-
-    <?php if ($currentProfile): ?>
-        <img src="<?php echo $currentProfile; ?>" alt="Profile Picture"><br>
-
-        <form method="POST">
-            <button class="button" name="delete">Remove Profile Picture</button>
+    <div class="container mt-3">
+        <h3><a href="home.php">← Back to Home</a></h3>
+        <hr>
+        
+        <h1>My Profile</h1>
+        
+        <?php if ($message) { ?>
+            <p class="text-success"><?php echo htmlspecialchars($message); ?></p>
+        <?php } ?>
+        
+        <p><strong>Username:</strong> <?php echo htmlspecialchars($user_data['username']); ?></p>
+        <p><strong>Role:</strong> <?php echo htmlspecialchars($user_data['role']); ?></p>
+        <p><strong>Member since:</strong> <?php echo htmlspecialchars($user_data['created_at']); ?></p>
+        
+        <h3>Profile Picture</h3>
+        
+        <?php if ($user_data['profile_pic'] && file_exists($user_data['profile_pic'])) { ?>
+            <img src="<?php echo htmlspecialchars($user_data['profile_pic']); ?>" width="150" alt="Profile">
+            <form method="POST" style="display:inline;">
+                <button type="submit" name="delete_pic" class="btn btn-danger btn-sm">Delete Picture</button>
+            </form>
+        <?php } else { ?>
+            <p>No profile picture uploaded.</p>
+        <?php } ?>
+        
+        <h4>Upload New Picture</h4>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="profile_pic" accept=".jpg,.jpeg,.png" required>
+            <br><br>
+            <button type="submit" class="btn btn-primary">Upload</button>
         </form>
-
-    <?php else: ?>
-        <p>No picture uploaded.</p>
-    <?php endif; ?>
-
-    <hr>
-
-    <form method="POST" enctype="multipart/form-data">
-        <label>Upload new profile picture:</label><br><br>
-        <input type="file" name="profile" required><br><br>
-        <button type="submit" class="button">Save</button>
-    </form>
-
-</div>
-
+        
+        <p class="text-muted">Accepted: JPG, JPEG, PNG. Max 5MB.</p>
+    </div>
 </body>
 </html>
