@@ -1,5 +1,6 @@
 <?php
 session_start();
+require 'db.php';
 
 // ✅ Only Admin allowed
 if (!isset($_SESSION["user"]) || $_SESSION["role"] !== "admin") {
@@ -8,113 +9,77 @@ if (!isset($_SESSION["user"]) || $_SESSION["role"] !== "admin") {
 }
 
 $message = "";
-$msgType = ""; // success, danger, or warning
+$msgType = ""; 
 
-// ✅ Storage file
-$file = "teams.txt";
-if (!file_exists($file)) {
-    file_put_contents($file, "");
-}
-
-// Define Groups A to L
 $groupsList = range('A', 'L');
 
-// ✅ Handle Form Submission
+// === 1. Handle Form Submission ===
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $action = $_POST['action'] ?? '';
     $group  = $_POST['group'] ?? '';
     $team   = trim($_POST['team'] ?? '');
 
-    // Load current file content
-    $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
-    // --- LOGIC: ADD TEAM ---
+    // --- ADD TEAM ---
     if ($action === 'add') {
-        if ($group !== "" && $team !== "") {
-            $exists = false;
-            $groupCount = 0;
+        if ($group && $team) {
+            // Check count in group
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM teams WHERE group_name = ?");
+            $stmt->execute([$group]);
+            $count = $stmt->fetchColumn();
 
-            // Check duplicates and count teams in this group
-            foreach ($lines as $line) {
-                $parts = explode("|", $line);
-                if (count($parts) >= 2) {
-                    if ($parts[0] === $group) {
-                        $groupCount++;
-                        if (strcasecmp(trim($parts[1]), $team) === 0) {
-                            $exists = true;
-                        }
-                    }
-                }
-            }
-
-            if ($exists) {
-                $message = "Team '$team' is already in Group $group!";
-                $msgType = "danger";
-            } elseif ($groupCount >= 4) {
-                // 🛑 Check: Max 4 teams
-                $message = "Group $group is full! (Max 4 teams allowed)";
+            if ($count >= 4) {
+                $message = "Group $group is full! (Max 4 teams)";
                 $msgType = "danger";
             } else {
-                // Save to file
-                file_put_contents($file, "$group|$team\n", FILE_APPEND);
-                $message = "Success: '$team' added to Group $group.";
-                $msgType = "success";
-                $team = ""; // Clear input on success
+                try {
+                    $stmt = $pdo->prepare("INSERT INTO teams (group_name, name) VALUES (?, ?)");
+                    $stmt->execute([$group, $team]);
+                    $message = "Success: '$team' added to Group $group.";
+                    $msgType = "success";
+                } catch (PDOException $e) {
+                    $message = "Error: Team '$team' likely already exists.";
+                    $msgType = "danger";
+                }
             }
-        } else {
-            $message = "Please enter a team name.";
-            $msgType = "warning";
         }
     }
-
-    // --- LOGIC: REMOVE TEAM ---
+    // --- REMOVE TEAM ---
     elseif ($action === 'remove') {
-        if ($group !== "" && $team !== "") {
-            $newLines = [];
-            $found = false;
-
-            foreach ($lines as $line) {
-                $parts = explode("|", $line);
-                if (count($parts) >= 2) {
-                    // If this line matches the group AND team (case-insensitive), skip it (delete)
-                    if ($parts[0] === $group && strcasecmp(trim($parts[1]), $team) === 0) {
-                        $found = true;
-                        continue; 
-                    }
-                }
-                $newLines[] = $line;
-            }
-
-            if ($found) {
-                file_put_contents($file, implode("\n", $newLines) . "\n");
-                $message = "Removed '$team' from Group $group.";
-                $msgType = "warning"; // Yellow alert for deletion
-                $team = ""; // Clear input
+        if ($team) {
+            // Delete from DB
+            $stmt = $pdo->prepare("DELETE FROM teams WHERE name = ?");
+            $stmt->execute([$team]);
+            
+            if ($stmt->rowCount() > 0) {
+                $message = "Removed '$team'.";
+                $msgType = "warning";
             } else {
-                $message = "Team '$team' not found in Group $group.";
+                $message = "Team not found.";
                 $msgType = "danger";
             }
-        } else {
-            $message = "Please select a team to remove.";
-            $msgType = "warning";
         }
     }
 }
 
-// ✅ Load Data for Visualization
+// === 2. Load Data for View ===
 $teamsData = array_fill_keys($groupsList, []);
-// Reload file in case changes were made above
-$lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-foreach ($lines as $line) {
-    $parts = explode("|", $line);
-    if (count($parts) >= 2) {
-        $g = $parts[0];
-        $t = $parts[1];
-        if (isset($teamsData[$g])) {
-            $teamsData[$g][] = $t;
+$allTeamsList = [];
+
+// Fetch from DB
+try {
+    $stmt = $pdo->query("SELECT * FROM teams ORDER BY group_name, name");
+    while ($row = $stmt->fetch()) {
+        $g = $row['group_name'];
+        if (in_array($g, $groupsList)) {
+            $teamsData[$g][] = $row['name'];
         }
+        $allTeamsList[] = $row['name'];
     }
+} catch (PDOException $e) {
+    $message = "Database Error: " . $e->getMessage();
+    $msgType = "danger";
 }
+sort($allTeamsList);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -130,10 +95,7 @@ foreach ($lines as $line) {
         .team-list { list-style: none; padding: 0; margin: 0; }
         .team-list li { padding: 5px 10px; border-bottom: 1px solid #f0f0f0; font-size: 0.9rem; text-align: center; }
         .team-list li:last-child { border-bottom: none; }
-        
         .form-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); border: 1px solid #dee2e6; margin-bottom: 0px; }
-        
-        /* Danger zone styling */
         .form-section.danger-zone { border-color: #f5c6cb; background-color: #fff8f8; }
         .form-section.danger-zone h4 { color: #721c24; }
     </style>
@@ -149,7 +111,6 @@ foreach ($lines as $line) {
 
     <?php include "nav.php"; ?>
 
-    <!-- Success/Error Message -->
     <?php if ($message): ?>
         <div class="alert alert-<?php echo $msgType; ?> alert-dismissible fade show mt-3" role="alert">
             <?php echo htmlspecialchars($message); ?>
@@ -192,9 +153,7 @@ foreach ($lines as $line) {
                         <label class="form-label">Select Group</label>
                         <select class="form-select" name="group">
                             <?php foreach ($groupsList as $g): ?>
-                                <option value="<?php echo $g; ?>" <?php if(isset($_POST['group']) && $_POST['group'] === $g) echo 'selected'; ?>>
-                                    Group <?php echo $g; ?>
-                                </option>
+                                <option value="<?php echo $g; ?>">Group <?php echo $g; ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -217,20 +176,12 @@ foreach ($lines as $line) {
                     <input type="hidden" name="action" value="remove">
                     
                     <div class="col-12">
-                        <label class="form-label">Select Group</label>
-                        <select class="form-select" name="group" id="removeGroupSelect">
-                            <?php foreach ($groupsList as $g): ?>
-                                <option value="<?php echo $g; ?>" <?php if(isset($_POST['group']) && $_POST['group'] === $g) echo 'selected'; ?>>
-                                    Group <?php echo $g; ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-12">
                         <label class="form-label">Select Team to Remove</label>
-                        <!-- Changed from text input to select -->
-                        <select class="form-select" name="team" id="removeTeamSelect" required>
+                        <select class="form-select" name="team" required>
                             <option value="">Select Team...</option>
+                            <?php foreach ($allTeamsList as $t): ?>
+                                <option value="<?php echo htmlspecialchars($t); ?>"><?php echo htmlspecialchars($t); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="col-12 mt-4">
@@ -244,42 +195,5 @@ foreach ($lines as $line) {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<script>
-// Pass PHP data to JavaScript
-const teamsData = <?php echo json_encode($teamsData); ?>;
-
-const removeGroupSelect = document.getElementById('removeGroupSelect');
-const removeTeamSelect = document.getElementById('removeTeamSelect');
-
-function updateRemoveTeamOptions() {
-    const selectedGroup = removeGroupSelect.value;
-    const teams = teamsData[selectedGroup] || [];
-
-    // Clear existing options
-    removeTeamSelect.innerHTML = '<option value="">Select Team...</option>';
-
-    if (teams.length === 0) {
-        const option = document.createElement('option');
-        option.text = "(No teams in this group)";
-        option.disabled = true;
-        removeTeamSelect.add(option);
-    } else {
-        teams.forEach(team => {
-            const option = document.createElement('option');
-            option.value = team;
-            option.text = team;
-            removeTeamSelect.add(option);
-        });
-    }
-}
-
-// Event Listener for changes
-removeGroupSelect.addEventListener('change', updateRemoveTeamOptions);
-
-// Initialize on page load (in case a group is already selected or default 'A')
-document.addEventListener('DOMContentLoaded', updateRemoveTeamOptions);
-</script>
-
 </body>
 </html>

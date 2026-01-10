@@ -1,85 +1,133 @@
 <?php
 session_start();
+require 'db.php';
 
-// 1. Load Users from file
+// === 1. LOAD DATA ===
+
+// A. Load Matches & Actual Results from DB (The Single Source of Truth)
+// We get the stage (group_name) and the results (score_home, score_away, winner_ko)
+$matches = [];
+$stmt = $pdo->query("SELECT * FROM matches");
+while ($row = $stmt->fetch()) {
+    $matches[$row['id']] = $row;
+}
+
+// B. Load Users (Exclude Admins if desired)
 $users = [];
-$loggedInUser = $_SESSION['user'] ?? '';
+$stmt = $pdo->query("SELECT id, username, profile_picture FROM users WHERE role != 'admin' ORDER BY username ASC");
+$users_db = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Check if users.txt exists
-if (file_exists("users.txt")) {
-    $lines = file("users.txt", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+// C. Load All Tips
+$all_tips = [];
+$stmt = $pdo->query("SELECT user_id, match_id, tip_home, tip_away, tip_winner FROM tips");
+while ($row = $stmt->fetch()) {
+    $all_tips[$row['user_id']][$row['match_id']] = $row;
+}
+
+// === 2. CALCULATE POINTS ===
+
+$ranking = [];
+
+foreach ($users_db as $u) {
+    $uid = $u['id'];
+    $tips = $all_tips[$uid] ?? [];
     
-    foreach ($lines as $line) {
-        // Format: username|hash|profile_path|role
-        $parts = explode("|", $line);
+    // Initialize Counters
+    $stats = [
+        'name' => $u['username'],
+        'avatar' => $u['profile_picture'],
+        'exact' => 0,  // (3)
+        'diff' => 0,   // (2)
+        'winner' => 0, // (1)
+        'r32' => 0,    // (2)
+        'r16' => 0,    // (4)
+        'qf' => 0,     // (8)
+        'sf' => 0,     // (16)
+        'bronze' => 0, // (24)
+        'final' => 0,  // (32)
+        'total' => 0
+    ];
+
+    foreach ($tips as $mid => $tip) {
+        if (!isset($matches[$mid])) continue;
+        $m = $matches[$mid];
         
-        // Safety check for array length
-        if (count($parts) < 4) continue;
+        // Determine Stage Type
+        $isKo = ($mid > 72);
         
-        $username = trim($parts[0]);
-        $profilePic = trim($parts[2]);
-        $role = trim($parts[3]);
-        
-        // 2. Exclude Admins
-        if ($role === 'admin') {
-            continue;
+        // --- Group Phase Logic ---
+        if (!$isKo) {
+            // Check if match has a result
+            if ($m['score_home'] !== null && $m['score_away'] !== null) {
+                // Check if user has a tip
+                if ($tip['tip_home'] !== null && $tip['tip_away'] !== null) {
+                    $th = (int)$tip['tip_home'];
+                    $ta = (int)$tip['tip_away'];
+                    $rh = (int)$m['score_home'];
+                    $ra = (int)$m['score_away'];
+
+                    // Scoring: Tiered (Highest applies)
+                    // If Exact -> 3 pts total
+                    if ($th === $rh && $ta === $ra) {
+                        $stats['exact']++;
+                        $stats['total'] += 3;
+                    } 
+                    // If Correct GD (but not exact) -> 2 pts total
+                    elseif (($th - $ta) === ($rh - $ra)) {
+                        $stats['diff']++;
+                        $stats['total'] += 2;
+                    } 
+                    // If Correct Winner (but not GD/Exact) -> 1 pt total
+                    elseif (($th <=> $ta) === ($rh <=> $ra)) {
+                        $stats['winner']++;
+                        $stats['total'] += 1;
+                    }
+                }
+            }
+        } 
+        // --- KO Phase Logic ---
+        else {
+            if (!empty($m['winner_ko']) && !empty($tip['tip_winner'])) {
+                $userPick = trim($tip['tip_winner']);
+                $realWinner = trim($m['winner_ko']);
+
+                if (strcasecmp($userPick, $realWinner) === 0) {
+                    // Points based on Stage Name
+                    $stage = $m['group_name'];
+                    
+                    if (strpos($stage, '32') !== false) {
+                        $stats['r32']++;
+                        $stats['total'] += 2;
+                    } elseif (strpos($stage, '16') !== false) {
+                        $stats['r16']++;
+                        $stats['total'] += 4;
+                    } elseif (strpos($stage, 'Quarter') !== false) {
+                        $stats['qf']++;
+                        $stats['total'] += 8;
+                    } elseif (strpos($stage, 'Semi') !== false) {
+                        $stats['sf']++;
+                        $stats['total'] += 16;
+                    } elseif (strpos($stage, 'Third') !== false) {
+                        $stats['bronze']++;
+                        $stats['total'] += 24;
+                    } elseif (strpos($stage, 'Final') !== false) {
+                        $stats['final']++;
+                        $stats['total'] += 32;
+                    }
+                }
+            }
         }
-        
-        // Add to list
-        $users[] = [
-            'name' => $username,
-            'avatar' => $profilePic
-        ];
     }
+    $ranking[] = $stats;
 }
 
-// 3. Logic to handle Test/Clear buttons (Simulate points for REAL users)
-$action = $_POST['action'] ?? 'clear';
-
-// Iterate through the real users we loaded and assign points
-foreach ($users as &$user) {
-    if ($action === 'test') {
-        // Random Simulation Logic
-        $total_group_correct = rand(20, 55);
-        $exact = rand(0, 15);
-        $diff  = rand(0, 20);
-        $winner = max(0, $total_group_correct - $exact - $diff);
-
-        $user['exact']  = $exact;
-        $user['diff']   = $diff;
-        $user['winner'] = $winner;
-        
-        $user['r32']    = rand(0, 16);
-        $user['r16']    = rand(0, 8);
-        $user['qf']     = rand(0, 4);
-        $user['sf']     = rand(0, 2);
-        $user['bronze'] = rand(0, 1);
-        $user['champ']  = rand(0, 1);
-        
-        $user['total'] = ($user['exact'] * 3) + 
-                         ($user['diff'] * 2) + 
-                         ($user['winner'] * 1) + 
-                         ($user['r32'] * 2) + 
-                         ($user['r16'] * 4) + 
-                         ($user['qf'] * 8) + 
-                         ($user['sf'] * 16) + 
-                         ($user['bronze'] * 24) + 
-                         ($user['champ'] * 32);
-    } else {
-        // Clear / Default state
-        $user['exact'] = 0; $user['diff'] = 0; $user['winner'] = 0;
-        $user['r32'] = 0; $user['r16'] = 0; $user['qf'] = 0;
-        $user['sf'] = 0; $user['bronze'] = 0; $user['champ'] = 0;
-        $user['total'] = 0;
-    }
-}
-unset($user); // Break reference
-
-// 4. Sort users by Total Points Descending
-usort($users, function($a, $b) {
+// === 3. SORTING ===
+usort($ranking, function($a, $b) {
     return $b['total'] <=> $a['total'];
 });
+
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,44 +137,23 @@ usort($users, function($a, $b) {
   <style>
     body { background-color: #f8f9fa; }
     table { background-color: #fff; }
-    th { text-align: center; vertical-align: middle; background-color: #e9ecef; font-size: 0.9rem; }
-    td { text-align: center; vertical-align: middle; }
+    th { text-align: center; vertical-align: middle; background-color: #e9ecef; font-size: 0.85rem; }
+    td { text-align: center; vertical-align: middle; font-size: 0.95rem; }
     
-    /* Place column */
-    td:first-child { color: #6c757d; width: 50px; }
+    td:nth-child(2) { text-align: left; font-weight: bold; color: #333; min-width: 180px; } /* Username */
+    td:first-child { color: #6c757d; width: 40px; } /* Rank */
+    td:last-child { font-weight: bold; background-color: #f1f3f5; color: #0d6efd; font-size: 1.1rem; } /* Total */
 
-    /* User column */
-    td:nth-child(2) { text-align: left; font-weight: bold; color: #333; min-width: 200px; }
-    
-    /* Total Points column */
-    td:last-child { font-weight: bold; background-color: #f8f9fa; color: #0d6efd; }
-
-    /* Avatar styling */
     .user-avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        object-fit: cover;
-        margin-right: 10px;
-        border: 1px solid #dee2e6;
-        vertical-align: middle;
+        width: 30px; height: 30px; border-radius: 50%; object-fit: cover;
+        margin-right: 10px; border: 1px solid #dee2e6; vertical-align: middle;
     }
-    .user-avatar-placeholder {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background-color: #dee2e6;
-        color: #6c757d;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 10px;
-        font-size: 14px;
-        vertical-align: middle;
+    .user-initial {
+        width: 30px; height: 30px; border-radius: 50%; background-color: #dee2e6;
+        color: #6c757d; display: inline-flex; align-items: center; justify-content: center;
+        margin-right: 10px; font-weight: bold; font-size: 0.8rem; vertical-align: middle;
     }
-    
-    /* Highlight logged-in user */
-    .table-warning td:last-child { background-color: #fff3cd; } /* Match Bootstrap warning color */
+    .table-warning td { background-color: #fff3cd !important; } /* Highlight current user */
   </style>
 </head>
 <body>
@@ -134,7 +161,6 @@ usort($users, function($a, $b) {
 <div class="container my-5">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>Standings</h2>
-    <!-- Consistent Home button -->
     <a href="home.php" class="btn btn-primary btn-sm px-3">Home</a>
   </div>
 
@@ -157,38 +183,38 @@ usort($users, function($a, $b) {
         </tr>
       </thead>
       <tbody>
-        <?php if (empty($users)): ?>
+        <?php if (empty($ranking)): ?>
             <tr><td colspan="12" class="text-center py-4 text-muted">No users found.</td></tr>
         <?php else: ?>
             <?php
             $rank = 1;
-            foreach ($users as $u) {
-                // Highlight row if it matches logged-in user
-                $rowClass = ($u['name'] === $loggedInUser) ? 'table-warning' : '';
+            $currentUser = $_SESSION['user'] ?? '';
+            foreach ($ranking as $r) {
+                // Highlight Logic
+                $rowClass = ($r['name'] === $currentUser) ? 'table-warning' : '';
                 
-                // Determine Avatar
-                $avatarHtml = "";
-                if (!empty($u['avatar']) && file_exists($u['avatar'])) {
-                    $avatarHtml = '<img src="'.htmlspecialchars($u['avatar']).'" class="user-avatar" alt="Avatar">';
+                // Avatar Logic
+                $avatar = "";
+                if (!empty($r['avatar']) && file_exists($r['avatar'])) {
+                    $avatar = '<img src="'.htmlspecialchars($r['avatar']).'" class="user-avatar">';
                 } else {
-                    // Placeholder with first letter
-                    $initial = strtoupper(substr($u['name'], 0, 1));
-                    $avatarHtml = '<div class="user-avatar-placeholder">'.$initial.'</div>';
+                    $initial = strtoupper(substr($r['name'], 0, 1));
+                    $avatar = '<div class="user-initial">'.$initial.'</div>';
                 }
 
-                echo "<tr class='{$rowClass}'>";
+                echo "<tr class='$rowClass'>";
                 echo "<td>{$rank}</td>";
-                echo "<td>{$avatarHtml}" . htmlspecialchars($u['name']) . "</td>";
-                echo "<td>{$u['exact']}</td>";
-                echo "<td>{$u['diff']}</td>";
-                echo "<td>{$u['winner']}</td>";
-                echo "<td>{$u['r32']}</td>";
-                echo "<td>{$u['r16']}</td>";
-                echo "<td>{$u['qf']}</td>";
-                echo "<td>{$u['sf']}</td>";
-                echo "<td>{$u['bronze']}</td>";
-                echo "<td>{$u['champ']}</td>";
-                echo "<td>{$u['total']}</td>";
+                echo "<td>{$avatar}" . htmlspecialchars($r['name']) . "</td>";
+                echo "<td>{$r['exact']}</td>";
+                echo "<td>{$r['diff']}</td>";
+                echo "<td>{$r['winner']}</td>";
+                echo "<td>{$r['r32']}</td>";
+                echo "<td>{$r['r16']}</td>";
+                echo "<td>{$r['qf']}</td>";
+                echo "<td>{$r['sf']}</td>";
+                echo "<td>{$r['bronze']}</td>";
+                echo "<td>{$r['final']}</td>";
+                echo "<td>{$r['total']}</td>";
                 echo "</tr>";
                 $rank++;
             }
@@ -197,15 +223,6 @@ usort($users, function($a, $b) {
       </tbody>
     </table>
   </div>
-
-  <!-- Debug/Test Controls -->
-  <div class="mt-4">
-      <form method="post" class="d-flex gap-2">
-          <button type="submit" name="action" value="test" class="btn btn-warning">Test (Simulate Points)</button>
-          <button type="submit" name="action" value="clear" class="btn btn-secondary">Clear</button>
-      </form>
-  </div>
-
 </div>
 
 </body>

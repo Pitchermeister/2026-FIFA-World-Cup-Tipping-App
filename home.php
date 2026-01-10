@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once 'db.php'; // Include DB connection for checking completion status
 ?>
 <!DOCTYPE html>
 <html>
@@ -46,14 +47,28 @@ session_start();
             <p>You have administrative privileges.</p>
             <a href="update_results.php" class="button admin">📊 Update Results</a>
             <a href="tournament_schedule.php" class="button admin">🏟️ Manage Schedule</a>
-            <a href="teamsetup.php" class="button admin">⚙️ Manage Teams</a>
+            <a href="teamsetup.php" class="button admin">⚙️ Setup Matches</a>
 
         <!-- 3. If logged in but NOT admin (Regular User) -->
         <?php else: ?>
             
-            <!-- Check if user has FINISHED predictions (Winner of Match 104 is set) -->
+            <?php 
+                // Check if user has FINISHED predictions (Winner of Match 104 is set in DB)
+                $isFinished = false;
+                if (isset($_SESSION['user_id'])) {
+                    try {
+                        $stmt = $pdo->prepare("SELECT COUNT(*) FROM tips WHERE user_id = ? AND match_id = 104");
+                        $stmt->execute([$_SESSION['user_id']]);
+                        if ($stmt->fetchColumn() > 0) {
+                            $isFinished = true;
+                        }
+                    } catch (Exception $e) {
+                        // In case of error, default to false (show submit button)
+                    }
+                }
+            ?>
 
-            <?php if (isset($_SESSION['saved_post']['winner_104']) && $_SESSION['saved_post']['winner_104'] !== ""): ?>
+            <?php if ($isFinished): ?>
                 <!-- Finished -> Show My Tips -->
                 <a href="mytips.php" class="button">📋 My Predictions</a>
             <?php else: ?>

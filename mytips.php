@@ -1,96 +1,168 @@
 <?php
 session_start();
+require 'db.php';
 
-// Redirect if no predictions found
-if (!isset($_SESSION['group_predictions'])) {
-    echo "<div style='text-align:center; margin-top:50px;'>No predictions found. <a href='predictions.php'>Go to Predictions</a></div>";
+// Check login
+if (!isset($_SESSION["user_id"])) {
+    header("Location: login.php");
+    exit;
+}
+$user_id = $_SESSION["user_id"];
+
+// === 1. LOAD DATA FROM DB ===
+
+// A. Load Matches & Actual Results
+// We assume the admin updates 'score_home', 'score_away', and 'winner_ko' in the 'matches' table
+$matches = [];
+$stmt = $pdo->query("SELECT * FROM matches ORDER BY id ASC");
+while ($row = $stmt->fetch()) {
+    $matches[$row['id']] = $row;
+}
+
+// B. Load User Tips
+$user_tips = [];
+$stmt = $pdo->prepare("SELECT * FROM tips WHERE user_id = ?");
+$stmt->execute([$user_id]);
+while ($row = $stmt->fetch()) {
+    $user_tips[$row['match_id']] = $row;
+}
+
+// Check if user has any tips
+if (empty($user_tips)) {
+    echo "<div class='container my-5 text-center'>
+            <div class='alert alert-info'>You haven't made any predictions yet.</div>
+            <a href='predictions.php' class='btn btn-primary'>Go to Predictions</a>
+          </div>";
     exit;
 }
 
-// === 1. RETRIEVE DATA ===
-$group_preds = $_SESSION['group_predictions'];
-$ko_preds    = $_SESSION['saved_post'] ?? [];
+// === 2. RE-CALCULATE USER'S GROUP STANDINGS ===
+// We need this to resolve placeholders (e.g. "A1") for the User's KO bracket visualization.
+// We calculate this based on the USER'S tips, not the actual results.
 
-$group_winners = $_SESSION['group_winners'] ?? [];
-$group_runners = $_SESSION['group_runners'] ?? [];
-$group_third   = $_SESSION['group_third']   ?? [];
-
-// Helper to get specific team inputs
-function getGroupScore($g, $id, $type, $data) {
-    return $data["{$g}_{$type}_{$id}"] ?? '';
+$stats = [];
+// Initialize teams list from matches (1-72)
+for ($i = 1; $i <= 72; $i++) {
+    if (!isset($matches[$i])) continue;
+    $g = $matches[$i]['group_name'];
+    $t1 = $matches[$i]['team1'];
+    $t2 = $matches[$i]['team2'];
+    
+    if (!isset($stats[$g][$t1])) $stats[$g][$t1] = ['name'=>$t1, 'pts'=>0, 'gf'=>0, 'ga'=>0, 'gd'=>0];
+    if (!isset($stats[$g][$t2])) $stats[$g][$t2] = ['name'=>$t2, 'pts'=>0, 'gf'=>0, 'ga'=>0, 'gd'=>0];
 }
 
-// === 2. DEFINE STRUCTURES (Must match previous files) ===
+// Process User Tips (1-72)
+for ($i = 1; $i <= 72; $i++) {
+    if (!isset($user_tips[$i]) || !isset($matches[$i])) continue;
+    
+    $m = $matches[$i];
+    $t = $user_tips[$i];
+    
+    // Skip if tip is incomplete (shouldn't happen if validation works)
+    if ($t['tip_home'] === null || $t['tip_away'] === null) continue;
 
-// Groups Data
-$groups = [
-  "A" => [ "teams" => ["Mexico", "Croatia", "Jordan", "Egypt"],
-           "matches" => [ ["home" => "Mexico", "away" => "Croatia"], ["home" => "Jordan", "away" => "Egypt"], ["home" => "Mexico", "away" => "Jordan"], ["home" => "Croatia", "away" => "Egypt"], ["home" => "Mexico", "away" => "Egypt"], ["home" => "Croatia", "away" => "Jordan"] ] ],
-  "B" => [ "teams" => ["Canada", "Morocco", "Austria", "Ghana"],
-           "matches" => [ ["home" => "Canada", "away" => "Morocco"], ["home" => "Austria", "away" => "Ghana"], ["home" => "Canada", "away" => "Austria"], ["home" => "Morocco", "away" => "Ghana"], ["home" => "Canada", "away" => "Ghana"], ["home" => "Morocco", "away" => "Austria"] ] ],
-  "C" => [ "teams" => ["Spain", "ITA/NIR/WAL/BIH", "TUR/ROU/SVK/KOS", "Uzbekistan"],
-           "matches" => [ ["home" => "Spain", "away" => "ITA/NIR/WAL/BIH"], ["home" => "TUR/ROU/SVK/KOS", "away" => "Uzbekistan"], ["home" => "ITA/NIR/WAL/BIH", "away" => "Uzbekistan"], ["home" => "Spain", "away" => "TUR/ROU/SVK/KOS"], ["home" => "ITA/NIR/WAL/BIH", "away" => "TUR/ROU/SVK/KOS"], ["home" => "Uzbekistan", "away" => "Spain"] ] ],
-  "D" => [ "teams" => ["USA", "Algeria", "Colombia", "New-Zealand"],
-           "matches" => [ ["home" => "USA", "away" => "Algeria"], ["home" => "Colombia", "away" => "New-Zealand"], ["home" => "Algeria", "away" => "Colombia"], ["home" => "USA", "away" => "New-Zealand"], ["home" => "New-Zealand", "away" => "Algeria"], ["home" => "Colombia", "away" => "USA"] ] ],
-  "E" => [ "teams" => ["Argentina", "Uruguay", "Australia", "Qatar"],
-           "matches" => [ ["home" => "Argentina", "away" => "Uruguay"], ["home" => "Australia", "away" => "Qatar"], ["home" => "Uruguay", "away" => "Qatar"], ["home" => "Argentina", "away" => "Australia"], ["home" => "Uruguay", "away" => "Australia"], ["home" => "Qatar", "away" => "Argentina"] ] ],
-  "F" => [ "teams" => ["France", "Switzerland", "UKR/SWE/POL/ALB", "COD/JAM/NCL"],
-           "matches" => [ ["home" => "France", "away" => "Switzerland"], ["home" => "UKR/SWE/POL/ALB", "away" => "COD/JAM/NCL"], ["home" => "Switzerland", "away" => "COD/JAM/NCL"], ["home" => "France", "away" => "UKR/SWE/POL/ALB"], ["home" => "Switzerland", "away" => "UKR/SWE/POL/ALB"], ["home" => "COD/JAM/NCL", "away" => "France"] ] ],
-  "G" => [ "teams" => ["England", "Japan", "Norway", "IRQ/BOL/SUR"],
-           "matches" => [ ["home" => "England", "away" => "Japan"], ["home" => "Norway", "away" => "IRQ/BOL/SUR"], ["home" => "Japan", "away" => "IRQ/BOL/SUR"], ["home" => "England", "away" => "Norway"], ["home" => "Japan", "away" => "Norway"], ["home" => "IRQ/BOL/SUR", "away" => "England"] ] ],
-  "H" => [ "teams" => ["Brazil", "Senegal", "Panama", "Saudi Arabia"],
-           "matches" => [ ["home" => "Brazil", "away" => "Senegal"], ["home" => "Panama", "away" => "Saudi Arabia"], ["home" => "Senegal", "away" => "Saudi Arabia"], ["home" => "Brazil", "away" => "Panama"], ["home" => "Senegal", "away" => "Panama"], ["home" => "Saudi Arabia", "away" => "Brazil"] ] ],
-  "I" => [ "teams" => ["Portugal", "Iran", "Scotland", "South Africa"],
-           "matches" => [ ["home" => "Portugal", "away" => "Iran"], ["home" => "Scotland", "away" => "South Africa"], ["home" => "Iran", "away" => "South Africa"], ["home" => "Portugal", "away" => "Scotland"], ["home" => "Iran", "away" => "Scotland"], ["home" => "South Africa", "away" => "Portugal"] ] ],
-  "J" => [ "teams" => ["Netherlands", "DEN/MKD/CZE/IRL", "Paraguay", "Cabo Verde"],
-           "matches" => [ ["home" => "Netherlands", "away" => "DEN/MKD/CZE/IRL"], ["home" => "Paraguay", "away" => "Cabo Verde"], ["home" => "DEN/MKD/CZE/IRL", "away" => "Cabo Verde"], ["home" => "Netherlands", "away" => "Paraguay"], ["home" => "DEN/MKD/CZE/IRL", "away" => "Paraguay"], ["home" => "Cabo Verde", "away" => "Netherlands"] ] ],
-  "K" => [ "teams" => ["Belgium", "South Korea", "Tunisia", "Curaçao"],
-           "matches" => [ ["home" => "Belgium", "away" => "South Korea"], ["home" => "Tunisia", "away" => "Curaçao"], ["home" => "South Korea", "away" => "Curaçao"], ["home" => "Belgium", "away" => "Tunisia"], ["home" => "South Korea", "away" => "Tunisia"], ["home" => "Curaçao", "away" => "Belgium"] ] ],
-  "L" => [ "teams" => ["Germany", "Ecuador", "Côte d'Ivoire", "Haiti"],
-           "matches" => [ ["home" => "Germany", "away" => "Ecuador"], ["home" => "Côte d'Ivoire", "away" => "Haiti"], ["home" => "Ecuador", "away" => "Haiti"], ["home" => "Germany", "away" => "Côte d'Ivoire"], ["home" => "Ecuador", "away" => "Côte d'Ivoire"], ["home" => "Haiti", "away" => "Germany"] ] ]
+    $h = $t['tip_home'];
+    $a = $t['tip_away'];
+    $g = $m['group_name'];
+    $t1 = $m['team1'];
+    $t2 = $m['team2'];
+
+    // Goals
+    $stats[$g][$t1]['gf'] += $h; $stats[$g][$t1]['ga'] += $a;
+    $stats[$g][$t2]['gf'] += $a; $stats[$g][$t2]['ga'] += $h;
+
+    // Points
+    if ($h > $a) {
+        $stats[$g][$t1]['pts'] += 3;
+    } elseif ($a > $h) {
+        $stats[$g][$t2]['pts'] += 3;
+    } else {
+        $stats[$g][$t1]['pts'] += 1;
+        $stats[$g][$t2]['pts'] += 1;
+    }
+}
+
+// Sort & Extract Winners
+$my_winners = [];
+$my_runners = [];
+$my_thirds_candidates = [];
+
+foreach ($stats as $g => &$teams) {
+    // GD
+    foreach ($teams as &$tm) $tm['gd'] = $tm['gf'] - $tm['ga'];
+    unset($tm);
+    
+    // Sort
+    uasort($teams, function($a, $b) {
+        if ($b['pts'] != $a['pts']) return $b['pts'] - $a['pts'];
+        if ($b['gd'] != $a['gd']) return $b['gd'] - $a['gd'];
+        return $b['gf'] - $a['gf'];
+    });
+    
+    $ranked = array_values($teams);
+    if (isset($ranked[0])) $my_winners[$g] = $ranked[0]['name'];
+    if (isset($ranked[1])) $my_runners[$g] = $ranked[1]['name'];
+    if (isset($ranked[2])) {
+        $ranked[2]['group'] = $g;
+        $my_thirds_candidates[] = $ranked[2];
+    }
+}
+
+// Top 8 Thirds
+usort($my_thirds_candidates, function($a, $b) {
+    if ($b['pts'] != $a['pts']) return $b['pts'] - $a['pts'];
+    if ($b['gd'] != $a['gd']) return $b['gd'] - $a['gd'];
+    return $b['gf'] - $a['gf'];
+});
+$my_thirds = [];
+foreach (array_slice($my_thirds_candidates, 0, 8) as $t) {
+    $my_thirds[$t['group']] = $t['name'];
+}
+
+// === 3. HELPER: RESOLVE TEAMS ===
+function resolveTeamName($placeholder, $gw, $gr, $gt, $user_tips, $matches) {
+    if (preg_match('/^([A-L])1$/', $placeholder, $m)) return $gw[$m[1]] ?? $placeholder;
+    if (preg_match('/^([A-L])2$/', $placeholder, $m)) return $gr[$m[1]] ?? $placeholder;
+    if (preg_match('/^([A-L])3$/', $placeholder, $m)) return $gt[$m[1]] ?? $placeholder;
+
+    // Previous Winner
+    if (preg_match('/^Winner (\d+)$/i', $placeholder, $m)) {
+        $prevID = (int)$m[1];
+        return $user_tips[$prevID]['tip_winner'] ?? $placeholder;
+    }
+    
+    // Previous Loser
+    if (preg_match('/^Loser (\d+)$/i', $placeholder, $m)) {
+        $prevID = (int)$m[1];
+        $winner = $user_tips[$prevID]['tip_winner'] ?? null;
+        if ($winner && isset($matches[$prevID])) {
+            $prevMatch = $matches[$prevID];
+            // Recursively resolve participants
+            $p1 = resolveTeamName($prevMatch['team1'], $gw, $gr, $gt, $user_tips, $matches);
+            $p2 = resolveTeamName($prevMatch['team2'], $gw, $gr, $gt, $user_tips, $matches);
+            
+            if ($winner === $p1) return $p2;
+            if ($winner === $p2) return $p1;
+        }
+        return $placeholder;
+    }
+
+    if (strpos($placeholder, '/') !== false) return "3rd Place Combo";
+    
+    return $placeholder;
+}
+
+// Points Map for KO
+$ko_points_map = [
+    'Round of 32' => 2,
+    'Round of 16' => 4,
+    'Quarter Finals' => 8,
+    'Semi Finals' => 16,
+    'Third Place' => 24,
+    'Final' => 32
 ];
 
-// KO Data (R32)
-$r32 = [
-    73 => ["date"=>"2026-06-28", "t1"=>$group_runners["A"]??"A2", "t2"=>$group_runners["B"]??"B2"],
-    74 => ["date"=>"2026-06-29", "t1"=>$group_winners["E"]??"E1", "t2"=>"3rd Group"],
-    75 => ["date"=>"2026-06-29", "t1"=>$group_winners["F"]??"F1", "t2"=>$group_runners["C"]??"C2"],
-    76 => ["date"=>"2026-06-29", "t1"=>$group_winners["C"]??"C1", "t2"=>$group_runners["F"]??"F2"],
-    77 => ["date"=>"2026-06-30", "t1"=>$group_winners["I"]??"I1", "t2"=>"3rd Group"],
-    78 => ["date"=>"2026-06-30", "t1"=>$group_runners["E"]??"E2", "t2"=>$group_runners["I"]??"I2"],
-    79 => ["date"=>"2026-06-30", "t1"=>$group_winners["A"]??"A1", "t2"=>"3rd Group"],
-    80 => ["date"=>"2026-07-01", "t1"=>$group_winners["L"]??"L1", "t2"=>"3rd Group"],
-    81 => ["date"=>"2026-07-01", "t1"=>$group_winners["D"]??"D1", "t2"=>"3rd Group"],
-    82 => ["date"=>"2026-07-01", "t1"=>$group_winners["G"]??"G1", "t2"=>"3rd Group"],
-    83 => ["date"=>"2026-07-02", "t1"=>$group_runners["K"]??"K2", "t2"=>$group_runners["L"]??"L2"],
-    84 => ["date"=>"2026-07-02", "t1"=>$group_winners["H"]??"H1", "t2"=>$group_runners["J"]??"J2"],
-    85 => ["date"=>"2026-07-02", "t1"=>$group_winners["B"]??"B1", "t2"=>"3rd Group"],
-    86 => ["date"=>"2026-07-03", "t1"=>$group_winners["J"]??"J1", "t2"=>$group_runners["H"]??"H2"],
-    87 => ["date"=>"2026-07-03", "t1"=>$group_winners["K"]??"K1", "t2"=>"3rd Group"],
-    88 => ["date"=>"2026-07-03", "t1"=>$group_runners["D"]??"D2", "t2"=>$group_runners["G"]??"G2"],
-];
-
-// Map for later rounds
-$rounds_map = [
-  // R16
-  89 => [74, 77], 90 => [73, 75], 91 => [76, 78], 92 => [79, 80],
-  93 => [83, 84], 94 => [81, 82], 95 => [86, 88], 96 => [85, 87],
-  // QF
-  97 => [89, 90], 98 => [93, 94], 99 => [91, 92], 100 => [95, 96],
-  // SF
-  101 => [97, 98], 102 => [99, 100]
-];
-
-// Date Map for KO
-$date_map = [
-  89=>"2026-07-04", 90=>"2026-07-04", 91=>"2026-07-05", 92=>"2026-07-05",
-  93=>"2026-07-06", 94=>"2026-07-06", 95=>"2026-07-07", 96=>"2026-07-07",
-  97=>"2026-07-09", 98=>"2026-07-10", 99=>"2026-07-11", 100=>"2026-07-11",
-  101=>"2026-07-14", 102=>"2026-07-15", 103=>"2026-07-18", 104=>"2026-07-19",
-];
-
-// Helpers for Random Time (Mock)
-function mockTime() { return str_pad(rand(13,21), 2, "0", STR_PAD_LEFT) . ":00"; }
 ?>
 
 <!DOCTYPE html>
@@ -100,12 +172,16 @@ function mockTime() { return str_pad(rand(13,21), 2, "0", STR_PAD_LEFT) . ":00";
   <title>My Tips</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { background-color: #f8f9fa; }
-    table { background-color: #fff; }
-    th, td { text-align: center; vertical-align: middle; }
-    /* Keeping the functional bolding, but matching the table style */
+    body { background-color: #f0f2f5; }
+    .phase-header { background-color: #212529; color: #fff; padding: 10px; margin-top: 30px; border-radius: 5px; }
+    .table th { background-color: #e9ecef; font-size: 0.9rem; text-align: center; vertical-align: middle; }
+    .table td { vertical-align: middle; text-align: center; }
     .tip-score { font-weight: bold; color: #0d6efd; }
-    .tip-winner { font-weight: bold; color: #198754; }
+    .actual-res { font-weight: bold; color: #198754; }
+    .cb-cell { width: 40px; }
+    input[type=checkbox] { transform: scale(1.2); pointer-events: none; }
+    .points-cell { font-weight: bold; font-size: 1.1rem; }
+    .match-meta { display: block; font-size: 0.75rem; color: #6c757d; }
   </style>
 </head>
 <body>
@@ -113,159 +189,163 @@ function mockTime() { return str_pad(rand(13,21), 2, "0", STR_PAD_LEFT) . ":00";
 <div class="container my-5">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>My Predictions</h1>
-    <div>
-        <!-- Added Home Button -->
-        <a href="home.php" class="btn btn-primary btn-sm px-3">Home</a>
-    </div>
+    <a href="home.php" class="btn btn-primary btn-sm px-3">Home</a>
   </div>
 
-  <!-- GROUP PHASE TABLE -->
-  <h2 class="text-center mt-4 mb-3">Group Phase (Matches 1-72)</h2>
-  <div class="table-responsive">
-    <table class="table table-bordered align-middle">
-      <thead class="table-light">
+  <!-- GROUP PHASE -->
+  <h3 class="phase-header">Group Phase (Matches 1-72)</h3>
+  <div class="table-responsive shadow-sm bg-white rounded">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
         <tr>
-          <th>#</th>
-          <th>Date & Time</th>
-          <th>Match (Home vs Away)</th>
+          <th>Date</th>
+          <th>Group</th>
+          <th>Match</th>
           <th>Tip (Score)</th>
-          <th>GD</th>
-          <th>Predicted Winner</th>
-          <th>Actual Winner</th>
+          <th>Actual Result</th>
+          <th title="Correct Score (1pt)">Exact<br>Score</th>
+          <th title="Correct Goal Diff (1pt)">Correct<br>GD</th>
+          <th title="Correct Winner (1pt)">Correct<br>Winner</th>
           <th>Points</th>
         </tr>
       </thead>
       <tbody>
         <?php
-        $matchID = 1;
-        foreach ($groups as $gName => $gdata) {
-          $localID = 0; // for finding dates relative to start
-          foreach ($gdata['matches'] as $m) {
-             // Mock date generation
-             $date = date("Y-m-d", strtotime("+$localID days"));
-             
-             // Get Tips
-             $hScore = getGroupScore($gName, $localID, 'home', $group_preds);
-             $aScore = getGroupScore($gName, $localID, 'away', $group_preds);
-             
-             // Calculations
-             $gd = "-";
-             $winner = "-";
-             if ($hScore !== '' && $aScore !== '') {
-                 $diff = (int)$hScore - (int)$aScore;
-                 $gd = ($diff > 0 ? "+" : "") . $diff;
-                 
-                 if ($diff > 0) $winner = $m['home'];
-                 elseif ($diff < 0) $winner = $m['away'];
-                 else $winner = "Draw";
-             }
-             
-             echo "<tr>
-                    <td>{$matchID}</td>
-                    <td>{$date} <small class='text-muted'>".mockTime()."</small></td>
-                    <td>{$m['home']} <span class='text-muted'>vs</span> {$m['away']}</td>
-                    <td class='tip-score'>" . ($hScore!=='' ? "$hScore : $aScore" : "-") . "</td>
-                    <td>{$gd}</td>
-                    <td>{$winner}</td>
-                    <td class='text-muted'>TBD</td>
-                    <td>0</td>
+        $totalGroupPoints = 0;
+        
+        for ($id = 1; $id <= 72; $id++) {
+            if (!isset($matches[$id])) continue;
+            $m = $matches[$id];
+            
+            // User Tip
+            $t = $user_tips[$id] ?? null;
+            $uh = $t['tip_home'] ?? null;
+            $ua = $t['tip_away'] ?? null;
+            $hasTip = ($uh !== null && $ua !== null);
+
+            // Actual Result
+            $rh = $m['score_home'];
+            $ra = $m['score_away'];
+            $hasResult = ($rh !== null && $ra !== null);
+
+            // Points Logic
+            $p_score = 0; $p_gd = 0; $p_winner = 0;
+
+            if ($hasTip && $hasResult) {
+                // 1. Exact Score
+                if ($uh == $rh && $ua == $ra) $p_score = 1;
+                // 2. Goal Diff
+                if (($uh - $ua) == ($rh - $ra)) $p_gd = 1;
+                // 3. Winner
+                if (($uh <=> $ua) == ($rh <=> $ra)) $p_winner = 1;
+            }
+
+            $rowPoints = $p_score + $p_gd + $p_winner;
+            $totalGroupPoints += $rowPoints;
+
+            // Display
+            $tipStr = $hasTip ? "$uh : $ua" : "-";
+            
+            $actualStr = "-";
+            if ($hasResult) {
+                $wText = "Draw";
+                if ($rh > $ra) $wText = $m['team1'];
+                if ($ra > $rh) $wText = $m['team2'];
+                $actualStr = "$rh : $ra <br><span class='small text-muted'>$wText</span>";
+            }
+
+            $cbScore = $p_score ? "checked" : "";
+            $cbGD    = $p_gd ? "checked" : "";
+            $cbWin   = $p_winner ? "checked" : "";
+            $rowClass = ($rowPoints === 3) ? "table-success" : "";
+
+            echo "<tr class='$rowClass'>
+                    <td>{$m['date']} <span class='match-meta'>{$m['time']}</span></td>
+                    <td><span class='badge bg-light text-dark border'>{$m['group_name']}</span></td>
+                    <td>{$m['team1']} <span class='text-muted'>vs</span> {$m['team2']}</td>
+                    <td class='tip-score'>{$tipStr}</td>
+                    <td class='actual-res'>{$actualStr}</td>
+                    <td class='cb-cell'><input type='checkbox' $cbScore></td>
+                    <td class='cb-cell'><input type='checkbox' $cbGD></td>
+                    <td class='cb-cell'><input type='checkbox' $cbWin></td>
+                    <td class='points-cell'>{$rowPoints}</td>
                    </tr>";
-             
-             $localID++;
-             $matchID++;
-          }
         }
         ?>
+        <tr class="table-dark">
+            <td colspan="8" class="text-end fw-bold">Total Group Points:</td>
+            <td class="fw-bold"><?= $totalGroupPoints ?></td>
+        </tr>
       </tbody>
     </table>
   </div>
 
-  <!-- KO PHASE TABLE -->
-  <h2 class="text-center mt-5 mb-3">Knockout Phase (Matches 73-104)</h2>
-  <div class="table-responsive">
-    <table class="table table-bordered align-middle">
-      <thead class="table-light">
+  <!-- KO PHASE -->
+  <h3 class="phase-header">Knockout Phase (Matches 73-104)</h3>
+  <div class="table-responsive shadow-sm bg-white rounded">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
         <tr>
-          <th>#</th>
-          <th>Date & Time</th>
-          <th>Match (Team 1 vs Team 2)</th>
-          <th>Your Tip (Advancing Team)</th>
+          <th>Date</th>
+          <th>Stage</th>
+          <th>Match (Your Scenario)</th>
+          <th>Your Tip</th>
           <th>Actual Winner</th>
+          <th>Correct Tip?</th>
           <th>Points</th>
         </tr>
       </thead>
       <tbody>
         <?php
-        // Prepare Winners Cache for KO Loop
-        $W = [];
-        for($i=73; $i<=104; $i++) {
-            $W[$i] = $ko_preds["winner_$i"] ?? "";
-        }
+        $totalKoPoints = 0;
 
-        // Loop through 73 to 104
-        for ($i=73; $i<=104; $i++) {
-            $t1 = ""; $t2 = "";
+        for ($id = 73; $id <= 104; $id++) {
+            if (!isset($matches[$id])) continue;
+            $m = $matches[$id];
+
+            // Resolve Matchup Names based on User's path
+            $t1 = resolveTeamName($m['team1'], $my_winners, $my_runners, $my_thirds, $user_tips, $matches);
+            $t2 = resolveTeamName($m['team2'], $my_winners, $my_runners, $my_thirds, $user_tips, $matches);
+
+            // Tip & Result
+            $myTip = $user_tips[$id]['tip_winner'] ?? "-";
+            $realWinner = $m['winner_ko'] ?? "-";
+
+            // Points
+            $points = 0;
+            $isCorrect = false;
             
-            // Logic to get Date
-            if ($i <= 88) {
-               // R32 Dates from the $r32 array
-               $date = $r32[$i]['date'] ?? "TBD";
-            } else {
-               // Later rounds from $date_map
-               $date = $date_map[$i] ?? "TBD";
-            }
-
-            // 1. Determine Participants
-            if ($i <= 88) {
-                // R32: Static map
-                $t1 = $r32[$i]['t1'];
-                $t2 = $r32[$i]['t2'];
-            } elseif ($i <= 102) {
-                // R16, QF, SF: Dependent on previous winners
-                if (isset($rounds_map[$i])) {
-                    $src1 = $rounds_map[$i][0];
-                    $src2 = $rounds_map[$i][1];
-                    $t1 = $W[$src1] !== "" ? $W[$src1] : "Winner #$src1";
-                    $t2 = $W[$src2] !== "" ? $W[$src2] : "Winner #$src2";
+            if ($myTip !== "-" && $realWinner !== "-" && $realWinner !== null) {
+                // Compare strings
+                if (strcasecmp(trim($myTip), trim($realWinner)) === 0) {
+                    $isCorrect = true;
+                    $points = $ko_points_map[trim($m['group_name'])] ?? 0;
                 }
-            } elseif ($i == 103) {
-                // 3rd Place
-                $m101_src = $rounds_map[101];
-                $teamA = $W[$m101_src[0]] ?? "Win#{$m101_src[0]}";
-                $teamB = $W[$m101_src[1]] ?? "Win#{$m101_src[1]}";
-                $w101  = $W[101] ?? "";
-                $loser101 = ($w101 === $teamA) ? $teamB : $teamA;
-                if ($w101 === "") $loser101 = "Loser #101";
-
-                $m102_src = $rounds_map[102];
-                $teamC = $W[$m102_src[0]] ?? "Win#{$m102_src[0]}";
-                $teamD = $W[$m102_src[1]] ?? "Win#{$m102_src[1]}";
-                $w102  = $W[102] ?? "";
-                $loser102 = ($w102 === $teamC) ? $teamD : $teamC;
-                if ($w102 === "") $loser102 = "Loser #102";
-
-                $t1 = $loser101;
-                $t2 = $loser102;
-            } elseif ($i == 104) {
-                // Final
-                $t1 = $W[101] !== "" ? $W[101] : "Winner #101";
-                $t2 = $W[102] !== "" ? $W[102] : "Winner #102";
             }
 
-            // 2. Get User Tip
-            $myTip = $W[$i] ?? "-";
-            
-            // 3. Render Row
-            echo "<tr>
-                    <td>{$i}</td>
-                    <td>{$date} <small class='text-muted'>".mockTime()."</small></td>
+            $totalKoPoints += $points;
+            $cbCorrect = $isCorrect ? "checked" : "";
+            $rowClass = $isCorrect ? "table-success" : "";
+
+            echo "<tr class='$rowClass'>
+                    <td>{$m['date']} <span class='match-meta'>{$m['time']}</span></td>
+                    <td><span class='badge bg-info text-dark'>{$m['group_name']}</span></td>
                     <td>{$t1} <span class='text-muted'>vs</span> {$t2}</td>
-                    <td class='tip-winner'>{$myTip}</td>
-                    <td class='text-muted'>TBD</td>
-                    <td>0</td>
+                    <td class='tip-score'>{$myTip}</td>
+                    <td class='actual-res'>{$realWinner}</td>
+                    <td class='cb-cell'><input type='checkbox' $cbCorrect></td>
+                    <td class='points-cell'>{$points}</td>
                   </tr>";
         }
         ?>
+        <tr class="table-dark">
+            <td colspan="6" class="text-end fw-bold">Total KO Points:</td>
+            <td class="fw-bold"><?= $totalKoPoints ?></td>
+        </tr>
+        <tr class="bg-warning">
+            <td colspan="6" class="text-end fw-bold h5">GRAND TOTAL:</td>
+            <td class="fw-bold h5"><?= ($totalGroupPoints + $totalKoPoints) ?></td>
+        </tr>
       </tbody>
     </table>
   </div>
