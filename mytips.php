@@ -12,7 +12,6 @@ $user_id = $_SESSION["user_id"];
 // === 1. LOAD DATA FROM DB ===
 
 // A. Load Matches & Actual Results
-// We assume the admin updates 'score_home', 'score_away', and 'winner_ko' in the 'matches' table
 $matches = [];
 $stmt = $pdo->query("SELECT * FROM matches ORDER BY id ASC");
 while ($row = $stmt->fetch()) {
@@ -34,123 +33,6 @@ if (empty($user_tips)) {
             <a href='predictions.php' class='btn btn-primary'>Go to Predictions</a>
           </div>";
     exit;
-}
-
-// === 2. RE-CALCULATE USER'S GROUP STANDINGS ===
-// We need this to resolve placeholders (e.g. "A1") for the User's KO bracket visualization.
-// We calculate this based on the USER'S tips, not the actual results.
-
-$stats = [];
-// Initialize teams list from matches (1-72)
-for ($i = 1; $i <= 72; $i++) {
-    if (!isset($matches[$i])) continue;
-    $g = $matches[$i]['group_name'];
-    $t1 = $matches[$i]['team1'];
-    $t2 = $matches[$i]['team2'];
-    
-    if (!isset($stats[$g][$t1])) $stats[$g][$t1] = ['name'=>$t1, 'pts'=>0, 'gf'=>0, 'ga'=>0, 'gd'=>0];
-    if (!isset($stats[$g][$t2])) $stats[$g][$t2] = ['name'=>$t2, 'pts'=>0, 'gf'=>0, 'ga'=>0, 'gd'=>0];
-}
-
-// Process User Tips (1-72)
-for ($i = 1; $i <= 72; $i++) {
-    if (!isset($user_tips[$i]) || !isset($matches[$i])) continue;
-    
-    $m = $matches[$i];
-    $t = $user_tips[$i];
-    
-    // Skip if tip is incomplete (shouldn't happen if validation works)
-    if ($t['tip_home'] === null || $t['tip_away'] === null) continue;
-
-    $h = $t['tip_home'];
-    $a = $t['tip_away'];
-    $g = $m['group_name'];
-    $t1 = $m['team1'];
-    $t2 = $m['team2'];
-
-    // Goals
-    $stats[$g][$t1]['gf'] += $h; $stats[$g][$t1]['ga'] += $a;
-    $stats[$g][$t2]['gf'] += $a; $stats[$g][$t2]['ga'] += $h;
-
-    // Points
-    if ($h > $a) {
-        $stats[$g][$t1]['pts'] += 3;
-    } elseif ($a > $h) {
-        $stats[$g][$t2]['pts'] += 3;
-    } else {
-        $stats[$g][$t1]['pts'] += 1;
-        $stats[$g][$t2]['pts'] += 1;
-    }
-}
-
-// Sort & Extract Winners
-$my_winners = [];
-$my_runners = [];
-$my_thirds_candidates = [];
-
-foreach ($stats as $g => &$teams) {
-    // GD
-    foreach ($teams as &$tm) $tm['gd'] = $tm['gf'] - $tm['ga'];
-    unset($tm);
-    
-    // Sort
-    uasort($teams, function($a, $b) {
-        if ($b['pts'] != $a['pts']) return $b['pts'] - $a['pts'];
-        if ($b['gd'] != $a['gd']) return $b['gd'] - $a['gd'];
-        return $b['gf'] - $a['gf'];
-    });
-    
-    $ranked = array_values($teams);
-    if (isset($ranked[0])) $my_winners[$g] = $ranked[0]['name'];
-    if (isset($ranked[1])) $my_runners[$g] = $ranked[1]['name'];
-    if (isset($ranked[2])) {
-        $ranked[2]['group'] = $g;
-        $my_thirds_candidates[] = $ranked[2];
-    }
-}
-
-// Top 8 Thirds
-usort($my_thirds_candidates, function($a, $b) {
-    if ($b['pts'] != $a['pts']) return $b['pts'] - $a['pts'];
-    if ($b['gd'] != $a['gd']) return $b['gd'] - $a['gd'];
-    return $b['gf'] - $a['gf'];
-});
-$my_thirds = [];
-foreach (array_slice($my_thirds_candidates, 0, 8) as $t) {
-    $my_thirds[$t['group']] = $t['name'];
-}
-
-// === 3. HELPER: RESOLVE TEAMS ===
-function resolveTeamName($placeholder, $gw, $gr, $gt, $user_tips, $matches) {
-    if (preg_match('/^([A-L])1$/', $placeholder, $m)) return $gw[$m[1]] ?? $placeholder;
-    if (preg_match('/^([A-L])2$/', $placeholder, $m)) return $gr[$m[1]] ?? $placeholder;
-    if (preg_match('/^([A-L])3$/', $placeholder, $m)) return $gt[$m[1]] ?? $placeholder;
-
-    // Previous Winner
-    if (preg_match('/^Winner (\d+)$/i', $placeholder, $m)) {
-        $prevID = (int)$m[1];
-        return $user_tips[$prevID]['tip_winner'] ?? $placeholder;
-    }
-    
-    // Previous Loser
-    if (preg_match('/^Loser (\d+)$/i', $placeholder, $m)) {
-        $prevID = (int)$m[1];
-        $winner = $user_tips[$prevID]['tip_winner'] ?? null;
-        if ($winner && isset($matches[$prevID])) {
-            $prevMatch = $matches[$prevID];
-            // Recursively resolve participants
-            $p1 = resolveTeamName($prevMatch['team1'], $gw, $gr, $gt, $user_tips, $matches);
-            $p2 = resolveTeamName($prevMatch['team2'], $gw, $gr, $gt, $user_tips, $matches);
-            
-            if ($winner === $p1) return $p2;
-            if ($winner === $p2) return $p1;
-        }
-        return $placeholder;
-    }
-
-    if (strpos($placeholder, '/') !== false) return "3rd Place Combo";
-    
-    return $placeholder;
 }
 
 // Points Map for KO
@@ -198,6 +80,7 @@ $ko_points_map = [
     <table class="table table-hover align-middle mb-0">
       <thead>
         <tr>
+          <th>#</th>
           <th>Date</th>
           <th>Group</th>
           <th>Match</th>
@@ -216,6 +99,9 @@ $ko_points_map = [
         for ($id = 1; $id <= 72; $id++) {
             if (!isset($matches[$id])) continue;
             $m = $matches[$id];
+            
+            // Format time clean (HH:MM)
+            $timeFormatted = substr($m['time'], 0, 5);
             
             // User Tip
             $t = $user_tips[$id] ?? null;
@@ -251,7 +137,7 @@ $ko_points_map = [
                 $wText = "Draw";
                 if ($rh > $ra) $wText = $m['team1'];
                 if ($ra > $rh) $wText = $m['team2'];
-                $actualStr = "$rh : $ra <br><span class='small text-muted'>$wText</span>";
+                $actualStr = "$rh : $ra <br><small class='text-muted'>$wText</small>";
             }
 
             $cbScore = $p_score ? "checked" : "";
@@ -260,7 +146,8 @@ $ko_points_map = [
             $rowClass = ($rowPoints === 3) ? "table-success" : "";
 
             echo "<tr class='$rowClass'>
-                    <td>{$m['date']} <span class='match-meta'>{$m['time']}</span></td>
+                    <td class='fw-bold'>$id</td>
+                    <td>{$m['date']}<br>{$timeFormatted}</td>
                     <td><span class='badge bg-light text-dark border'>{$m['group_name']}</span></td>
                     <td>{$m['team1']} <span class='text-muted'>vs</span> {$m['team2']}</td>
                     <td class='tip-score'>{$tipStr}</td>
@@ -273,7 +160,7 @@ $ko_points_map = [
         }
         ?>
         <tr class="table-dark">
-            <td colspan="8" class="text-end fw-bold">Total Group Points:</td>
+            <td colspan="9" class="text-end fw-bold">Total Group Points:</td>
             <td class="fw-bold"><?= $totalGroupPoints ?></td>
         </tr>
       </tbody>
@@ -286,9 +173,10 @@ $ko_points_map = [
     <table class="table table-hover align-middle mb-0">
       <thead>
         <tr>
+          <th>#</th>
           <th>Date</th>
           <th>Stage</th>
-          <th>Match (Your Scenario)</th>
+          <th>Match</th>
           <th>Your Tip</th>
           <th>Actual Winner</th>
           <th>Correct Tip?</th>
@@ -302,10 +190,13 @@ $ko_points_map = [
         for ($id = 73; $id <= 104; $id++) {
             if (!isset($matches[$id])) continue;
             $m = $matches[$id];
+            
+            // Format time clean
+            $timeFormatted = substr($m['time'], 0, 5);
 
-            // Resolve Matchup Names based on User's path
-            $t1 = resolveTeamName($m['team1'], $my_winners, $my_runners, $my_thirds, $user_tips, $matches);
-            $t2 = resolveTeamName($m['team2'], $my_winners, $my_runners, $my_thirds, $user_tips, $matches);
+            // Use DB values directly (no resolving)
+            $t1 = $m['team1'];
+            $t2 = $m['team2'];
 
             // Tip & Result
             $myTip = $user_tips[$id]['tip_winner'] ?? "-";
@@ -328,7 +219,8 @@ $ko_points_map = [
             $rowClass = $isCorrect ? "table-success" : "";
 
             echo "<tr class='$rowClass'>
-                    <td>{$m['date']} <span class='match-meta'>{$m['time']}</span></td>
+                    <td class='fw-bold'>$id</td>
+                    <td>{$m['date']}<br>{$timeFormatted}</td>
                     <td><span class='badge bg-info text-dark'>{$m['group_name']}</span></td>
                     <td>{$t1} <span class='text-muted'>vs</span> {$t2}</td>
                     <td class='tip-score'>{$myTip}</td>
@@ -339,11 +231,11 @@ $ko_points_map = [
         }
         ?>
         <tr class="table-dark">
-            <td colspan="6" class="text-end fw-bold">Total KO Points:</td>
+            <td colspan="7" class="text-end fw-bold">Total KO Points:</td>
             <td class="fw-bold"><?= $totalKoPoints ?></td>
         </tr>
         <tr class="bg-warning">
-            <td colspan="6" class="text-end fw-bold h5">GRAND TOTAL:</td>
+            <td colspan="7" class="text-end fw-bold h5">GRAND TOTAL:</td>
             <td class="fw-bold h5"><?= ($totalGroupPoints + $totalKoPoints) ?></td>
         </tr>
       </tbody>

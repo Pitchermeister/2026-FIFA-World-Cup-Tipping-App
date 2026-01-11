@@ -39,8 +39,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 // KO Phase: Save Winner
                 if ($id > 72) {
                     $winner = trim($data['winner'] ?? '');
-                    // Only update if not empty, or allow clearing? Let's allow updating non-empty.
-                    // To clear, admin can delete text.
                     $val = ($winner === '') ? null : $winner;
                     $stmtKo->execute([$val, $id]);
                     if ($val) $count++;
@@ -54,7 +52,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $stmtGroup->execute([(int)$h, (int)$a, $id]);
                         $count++;
                     } elseif ($h === '' && $a === '') {
-                        // Optional: Clear score if both empty
                         $stmtGroup->execute([null, null, $id]);
                     }
                 }
@@ -72,7 +69,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 $matches = [];
 try {
     $stmt = $pdo->query("SELECT * FROM matches ORDER BY id ASC");
-    $matches = $stmt->fetchAll();
+    // Optimized: Fetch row by row
+    while ($row = $stmt->fetch()) {
+        $matches[] = $row;
+    }
 } catch (PDOException $e) {
     $matches = [];
 }
@@ -106,9 +106,8 @@ try {
     <?php include "nav.php"; ?>
 
     <?php if ($message): ?>
-        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+        <div class="alert alert-success mt-3" role="alert">
             <?php echo htmlspecialchars($message); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     <?php endif; ?>
 
@@ -196,6 +195,5 @@ try {
     <?php endif; ?>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

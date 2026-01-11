@@ -22,10 +22,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // --- ADD TEAM ---
     if ($action === 'add') {
         if ($group && $team) {
-            // Check count in group
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM teams WHERE group_name = ?");
+            // Check count in group (Using fetch loop logic as requested)
+            $count = 0;
+            $stmt = $pdo->prepare("SELECT id FROM teams WHERE group_name = ?");
             $stmt->execute([$group]);
-            $count = $stmt->fetchColumn();
+            while ($row = $stmt->fetch()) {
+                $count++;
+            }
 
             if ($count >= 4) {
                 $message = "Group $group is full! (Max 4 teams)";
@@ -112,9 +115,8 @@ sort($allTeamsList);
     <?php include "nav.php"; ?>
 
     <?php if ($message): ?>
-        <div class="alert alert-<?php echo $msgType; ?> alert-dismissible fade show mt-3" role="alert">
+        <div class="alert alert-<?php echo $msgType; ?> mt-3" role="alert">
             <?php echo htmlspecialchars($message); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     <?php endif; ?>
 
@@ -194,6 +196,5 @@ sort($allTeamsList);
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -10,20 +10,8 @@ if (!isset($_SESSION["user"]) || $_SESSION["role"] !== "admin") {
 
 $message = "";
 $msgType = "";
-$next_id = 1;
 
-// === 1. Calculate Next ID from DB ===
-try {
-    $stmt = $pdo->query("SELECT MAX(id) FROM matches");
-    $max_id = $stmt->fetchColumn();
-    if ($max_id) {
-        $next_id = $max_id + 1;
-    }
-} catch (PDOException $e) {
-    // Table might be empty
-}
-
-// === 2. Handle Form Submission (Save Only) ===
+// === 1. Handle Form Submission (Save Only) ===
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $id     = (int)($_POST['id'] ?? 0);
     $date   = $_POST['date'] ?? '';
@@ -37,7 +25,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if ($team1 === $team2) {
             $message = "Error: A team cannot play against itself!";
             $msgType = "danger";
-            $next_id = $id; // Keep current ID inputs
         } else {
             try {
                 // Upsert Logic (Update if ID exists, Insert if new)
@@ -55,9 +42,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 
                 $message = "Match #$id saved successfully: $team1 vs $team2";
                 $msgType = "success";
-                
-                // Increment for next entry automatically
-                $next_id = $id + 1;
             } catch (PDOException $e) {
                 $message = "Database Error: " . $e->getMessage();
                 $msgType = "danger";
@@ -66,11 +50,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } else {
         $message = "Please fill in all fields correctly.";
         $msgType = "warning";
-        $next_id = $id;
     }
 }
 
-// === 3. Load ALL Teams for Dropdown (No Filtering) ===
+// === 2. Load ALL Teams for Dropdown (No Filtering) ===
 $allTeams = [];
 try {
     $stmt = $pdo->query("SELECT name FROM teams ORDER BY name ASC");
@@ -84,11 +67,14 @@ try {
 $groupsList = range('A', 'L'); 
 $koStages = ['Round of 32', 'Round of 16', 'Quarter Finals', 'Semi Finals', 'Third Place', 'Final'];
 
-// === 4. Load Existing Matches for Display ===
+// === 3. Load Existing Matches for Display ===
 $matches = [];
 try {
     $stmt = $pdo->query("SELECT * FROM matches ORDER BY id ASC");
-    $matches = $stmt->fetchAll();
+    // Changed to while loop + fetch() as requested
+    while ($row = $stmt->fetch()) {
+        $matches[] = $row;
+    }
 } catch (PDOException $e) {
     $matches = [];
 }
@@ -135,7 +121,8 @@ try {
                 <!-- Match ID -->
                 <div class="col-md-1">
                     <label class="form-label fw-bold">ID</label>
-                    <input type="number" name="id" class="form-control" min="1" max="104" placeholder="#" value="<?php echo $next_id; ?>" required>
+                    <!-- Removed auto-fill value -->
+                    <input type="number" name="id" class="form-control" min="1" max="104" placeholder="#" required>
                 </div>
 
                 <!-- Date -->
@@ -231,7 +218,5 @@ try {
     </div>
 
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -47,24 +47,23 @@ require_once 'db.php'; // Include DB connection for checking completion status
             <p>You have administrative privileges.</p>
             <a href="update_results.php" class="button admin">📊 Update Results</a>
             <a href="tournament_schedule.php" class="button admin">🏟️ Manage Schedule</a>
-            <a href="teamsetup.php" class="button admin">⚙️ Manage Teams</a>
+            <a href="setup_matches.php" class="button admin">⚙️ Setup Matches</a>
 
         <!-- 3. If logged in but NOT admin (Regular User) -->
         <?php else: ?>
             
             <?php 
-                // Check if user has FINISHED predictions (Winner of Match 104 is set in DB)
+                // Simplified Check: Has user predicted the Final (Match 104)?
                 $isFinished = false;
                 if (isset($_SESSION['user_id'])) {
                     try {
-                        $stmt = $pdo->prepare("SELECT COUNT(*) FROM tips WHERE user_id = ? AND match_id = 104");
+                        // Just select 1 row to see if it exists
+                        $stmt = $pdo->prepare("SELECT 1 FROM tips WHERE user_id = ? AND match_id = 104");
                         $stmt->execute([$_SESSION['user_id']]);
-                        if ($stmt->fetchColumn() > 0) {
+                        if ($stmt->fetch()) {
                             $isFinished = true;
                         }
-                    } catch (Exception $e) {
-                        // In case of error, default to false (show submit button)
-                    }
+                    } catch (Exception $e) { /* Ignore DB error */ }
                 }
             ?>
 
