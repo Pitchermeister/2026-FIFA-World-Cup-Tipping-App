@@ -13,13 +13,12 @@ $error = "";
 
 // === 1. Load Group Matches from DB ===
 $stmt = $pdo->query("SELECT * FROM matches WHERE id BETWEEN 1 AND 72 ORDER BY id ASC");
-$matches_db = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Organize by Group
 $groups = [];
 $matchMap = [];
 
-foreach ($matches_db as $m) {
+while ($m = $stmt->fetch()) {
     $g = $m['group_name']; // e.g. 'A'
     $groups[$g][] = $m;
     $matchMap[$m['id']] = $m;

@@ -71,7 +71,6 @@ $koStages = ['Round of 32', 'Round of 16', 'Quarter Finals', 'Semi Finals', 'Thi
 $matches = [];
 try {
     $stmt = $pdo->query("SELECT * FROM matches ORDER BY id ASC");
-    // Changed to while loop + fetch() as requested
     while ($row = $stmt->fetch()) {
         $matches[] = $row;
     }

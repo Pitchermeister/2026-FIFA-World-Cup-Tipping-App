@@ -15,7 +15,10 @@ while ($row = $stmt->fetch()) {
 // B. Load Users (Exclude Admins if desired)
 $users = [];
 $stmt = $pdo->query("SELECT id, username, profile_picture FROM users WHERE role != 'admin' ORDER BY username ASC");
-$users_db = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$users_db = [];
+while ($row = $stmt->fetch()) {
+    $users_db[] = $row;
+}
 
 // C. Load All Tips
 $all_tips = [];
