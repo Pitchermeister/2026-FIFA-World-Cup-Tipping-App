@@ -61,7 +61,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <div class="login-card mt-4">
         <h3 class="text-center mb-4">Welcome Back</h3>
 
-        <?php if ($message): ?>
+        <?php if ($message): //wtf is this? ?> 
             <div class="alert alert-danger text-center" role="alert">
                 <?= htmlspecialchars($message) ?>
             </div>

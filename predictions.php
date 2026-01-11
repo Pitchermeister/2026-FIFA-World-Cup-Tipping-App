@@ -12,7 +12,6 @@ $user_id = $_SESSION["user_id"];
 $error = "";
 
 // === 1. Load Group Matches from DB ===
-// Assuming IDs 1-72 are always Group Stage based on your schedule
 $stmt = $pdo->query("SELECT * FROM matches WHERE id BETWEEN 1 AND 72 ORDER BY id ASC");
 $matches_db = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -22,19 +21,10 @@ $matchMap = [];
 
 foreach ($matches_db as $m) {
     $g = $m['group_name']; // e.g. 'A'
-    if (!isset($groups[$g])) {
-        $groups[$g] = ['matches' => [], 'teams' => []];
-    }
-    
-    $groups[$g]['matches'][] = $m;
-    
-    // Collect unique teams for standings
-    if (!in_array($m['team1'], $groups[$g]['teams'])) $groups[$g]['teams'][] = $m['team1'];
-    if (!in_array($m['team2'], $groups[$g]['teams'])) $groups[$g]['teams'][] = $m['team2'];
-
+    $groups[$g][] = $m;
     $matchMap[$m['id']] = $m;
 }
-ksort($groups);
+ksort($groups); 
 
 // === 2. Load Existing User Tips from DB ===
 $user_tips = [];
@@ -45,23 +35,17 @@ while ($row = $stmt->fetch()) {
     $user_tips["match_{$row['match_id']}_away"] = $row['tip_away'];
 }
 
-// Variables for View (Merge DB tips with POST data if any)
+// Variables for View
 $savedData = $user_tips;
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    // Overwrite with POST data so input doesn't reset on error/random
-    foreach ($matchMap as $id => $m) {
-        $hKey = "match_{$id}_home";
-        $aKey = "match_{$id}_away";
-        if (isset($_POST[$hKey])) $savedData[$hKey] = $_POST[$hKey];
-        if (isset($_POST[$aKey])) $savedData[$aKey] = $_POST[$aKey];
-    }
+    $savedData = array_merge($savedData, $_POST);
 }
 
 // === 3. Handle POST Logic ===
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $action = $_POST['action'] ?? '';
 
-    // A. Fill Random (PHP Logic)
+    // A. Fill Random
     if ($action === 'random') {
         foreach ($matchMap as $id => $m) {
             $savedData["match_{$id}_home"] = rand(0, 3);
@@ -71,7 +55,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     
     // B. Save & Proceed
     elseif ($action === 'save') {
-        // 1. Validate: Check if ALL matches have scores
         $allFilled = true;
         foreach ($matchMap as $id => $m) {
             $valH = $savedData["match_{$id}_home"] ?? '';
@@ -84,13 +67,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if (!$allFilled) {
             $error = "⚠️ You must predict scores for ALL matches before proceeding.";
         } else {
-            // 2. Save to Database
-            $pdo->beginTransaction();
             try {
-                $sql = "INSERT INTO tips (user_id, match_id, tip_home, tip_away) 
-                        VALUES (?, ?, ?, ?) 
-                        ON DUPLICATE KEY UPDATE tip_home = VALUES(tip_home), tip_away = VALUES(tip_away)";
-                $stmt = $pdo->prepare($sql);
+                $pdo->beginTransaction();
+                $stmt = $pdo->prepare("INSERT INTO tips (user_id, match_id, tip_home, tip_away) 
+                                       VALUES (?, ?, ?, ?) 
+                                       ON DUPLICATE KEY UPDATE tip_home = VALUES(tip_home), tip_away = VALUES(tip_away)");
 
                 foreach ($matchMap as $id => $m) {
                     $h = (int)$savedData["match_{$id}_home"];
@@ -98,74 +79,53 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $stmt->execute([$user_id, $id, $h, $a]);
                 }
                 $pdo->commit();
-            } catch (Exception $e) {
-                $pdo->rollBack();
-                $error = "Database Error: " . $e->getMessage();
-            }
-
-            if (!$error) {
-                // 3. Calculate Standings (For KO Phase Logic)
-                // We need to know who wins based on these tips to generate the KO bracket
                 
-                $stats = [];
-                // Init Teams
-                foreach ($groups as $gName => $gData) {
-                    foreach ($gData['teams'] as $team) {
-                        $stats[$gName][$team] = ['name' => $team, 'gf' => 0, 'ga' => 0, 'gd' => 0, 'pts' => 0];
-                    }
-                }
-
-                // Process Scores
+                // Calculate Standings for KO Phase
+                $stats = []; 
                 foreach ($matchMap as $id => $m) {
-                    $gName = $m['group_name'];
+                    $g = $m['group_name'];
                     $t1 = $m['team1'];
                     $t2 = $m['team2'];
                     $h = (int)$savedData["match_{$id}_home"];
                     $a = (int)$savedData["match_{$id}_away"];
+                    
+                    if (!isset($stats[$g][$t1])) $stats[$g][$t1] = ['name'=>$t1, 'pts'=>0, 'gf'=>0, 'ga'=>0, 'gd'=>0];
+                    if (!isset($stats[$g][$t2])) $stats[$g][$t2] = ['name'=>$t2, 'pts'=>0, 'gf'=>0, 'ga'=>0, 'gd'=>0];
 
-                    $stats[$gName][$t1]['gf'] += $h; $stats[$gName][$t1]['ga'] += $a;
-                    $stats[$gName][$t2]['gf'] += $a; $stats[$gName][$t2]['ga'] += $h;
+                    $stats[$g][$t1]['gf'] += $h; $stats[$g][$t1]['ga'] += $a;
+                    $stats[$g][$t2]['gf'] += $a; $stats[$g][$t2]['ga'] += $h;
 
-                    if ($h > $a) $stats[$gName][$t1]['pts'] += 3;
-                    elseif ($a > $h) $stats[$gName][$t2]['pts'] += 3;
+                    if ($h > $a) $stats[$g][$t1]['pts'] += 3;
+                    elseif ($a > $h) $stats[$g][$t2]['pts'] += 3;
                     else {
-                        $stats[$gName][$t1]['pts'] += 1;
-                        $stats[$gName][$t2]['pts'] += 1;
+                        $stats[$g][$t1]['pts'] += 1;
+                        $stats[$g][$t2]['pts'] += 1;
                     }
                 }
 
-                // Sort & Extract
                 $group_winners = [];
                 $group_runners = [];
                 $third_place_candidates = [];
 
-                foreach ($stats as $gName => &$teams) {
-                    foreach ($teams as &$t) {
-                        $t['gd'] = $t['gf'] - $t['ga'];
-                    }
-                    unset($t);
-
+                foreach ($stats as $g => &$teams) {
+                    foreach ($teams as &$t) $t['gd'] = $t['gf'] - $t['ga'];
+                    
                     uasort($teams, function($a, $b) {
                         if ($b['pts'] != $a['pts']) return $b['pts'] - $a['pts'];
                         if ($b['gd'] != $a['gd']) return $b['gd'] - $a['gd'];
                         return $b['gf'] - $a['gf'];
                     });
 
-                    $sortedKeys = array_keys($teams);
-                    $group_winners[$gName] = $sortedKeys[0];
-                    $group_runners[$gName] = $sortedKeys[1];
-                    
-                    if (isset($sortedKeys[2])) {
-                        $t3Name = $sortedKeys[2];
-                        $t3Data = $teams[$t3Name];
-                        $t3Data['group'] = $gName;
-                        $third_place_candidates[] = $t3Data;
+                    $ranked = array_values($teams);
+                    $group_winners[$g] = $ranked[0]['name'];
+                    $group_runners[$g] = $ranked[1]['name'];
+                    if (isset($ranked[2])) {
+                        $ranked[2]['group'] = $g;
+                        $third_place_candidates[] = $ranked[2];
                     }
                 }
-                unset($teams);
 
-                // Top 8 Third Place
-                usort($third_place_candidates, function($a, $b) {
+                uasort($third_place_candidates, function($a, $b) {
                     if ($b['pts'] != $a['pts']) return $b['pts'] - $a['pts'];
                     if ($b['gd'] != $a['gd']) return $b['gd'] - $a['gd'];
                     return $b['gf'] - $a['gf'];
@@ -173,20 +133,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 
                 $group_third = [];
                 $top8 = array_slice($third_place_candidates, 0, 8);
-                foreach ($top8 as $t) {
-                    $group_third[$t['group']] = $t['name'];
-                }
+                foreach ($top8 as $t) $group_third[$t['group']] = $t['name'];
 
-                // Save Calculated State to Session (Needed for KO logic)
+                // === FIX: Set ALL Session Variables needed for KO Phase ===
+                $_SESSION['group_predictions'] = $savedData; // This fixes the redirect loop
                 $_SESSION['group_winners'] = $group_winners;
                 $_SESSION['group_runners'] = $group_runners;
                 $_SESSION['group_third'] = $group_third;
-                
-                // Clear any temp KO data as groups changed
-                unset($_SESSION['saved_post']);
+                unset($_SESSION['saved_post']); 
 
                 header("Location: ko-phase.php");
                 exit;
+
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $error = "Database Error: " . $e->getMessage();
             }
         }
     }
@@ -224,7 +185,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <?php else: ?>
 
   <form method="post">
-    <?php foreach ($groups as $gName => $gData): ?>
+    <?php foreach ($groups as $gName => $matches): ?>
       <h2 class="mt-4">Group <?= htmlspecialchars($gName) ?></h2>
       <div class="table-responsive mb-3">
         <table class="table table-bordered align-middle">
@@ -240,24 +201,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </thead>
           <tbody>
             <?php
-              foreach ($gData['matches'] as $m) {
+              foreach ($matches as $m) {
                 $mid = $m['id'];
-                $home = $m['team1'];
-                $away = $m['team2'];
-                $date = $m['date'];
-                $time = $m['time'];
-
                 $homeName = "match_{$mid}_home";
                 $awayName = "match_{$mid}_away";
-
                 $homeVal = $savedData[$homeName] ?? '';
                 $awayVal = $savedData[$awayName] ?? '';
+                
+                // Format time: remove seconds
+                $timeFormatted = substr($m['time'], 0, 5);
 
                 echo "<tr>
-                        <td>{$date}</td>
-                        <td><small class='text-muted'>{$time}</small></td>
-                        <td class='text-end fw-bold'>{$home}</td>
-                        <td class='text-start fw-bold'>{$away}</td>
+                        <td>{$m['date']}</td>
+                        <td><small class='text-muted'>{$timeFormatted}</small></td>
+                        <td class='text-end fw-bold'>{$m['team1']}</td>
+                        <td class='text-start fw-bold'>{$m['team2']}</td>
                         <td><input type='number' class='form-control text-center score-input' name='$homeName' min='0' max='9' value='".htmlspecialchars($homeVal)."'></td>
                         <td><input type='number' class='form-control text-center score-input' name='$awayName' min='0' max='9' value='".htmlspecialchars($awayVal)."'></td>
                       </tr>";

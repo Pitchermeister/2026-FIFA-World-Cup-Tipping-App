@@ -1,138 +1,143 @@
 <?php
 session_start();
-require 'db.php'; // Database connection
+require 'db.php'; 
 
-// Check login
-if (!isset($_SESSION["user_id"])) {
-    header("Location: login.php");
-    exit;
-}
-
-// Redirect if no group predictions calculated in session
+// Check prerequisites
 if (!isset($_SESSION['group_winners'])) {
     header("Location: predictions.php");
     exit;
 }
 
 $user_id = $_SESSION["user_id"];
-$group_winners = $_SESSION['group_winners'];
+
+// === 1. Load Data ===
+$group_winners = $_SESSION['group_winners']; // Array: ['A' => 'Germany', 'B' => 'USA'...]
 $group_runners = $_SESSION['group_runners'];
-$group_third   = $_SESSION['group_third']; // Top 8 Qualified 3rd Place Teams
-$saved_post    = $_SESSION['saved_post'] ?? []; // User's current KO tips from Session
+$group_third   = $_SESSION['group_third'];   // Top 8 only
 
-$error_msg = "";
+$saved_post = $_SESSION['saved_post'] ?? [];
 
-// === 1. Load KO Matches from DB ===
-$stmt = $pdo->query("SELECT * FROM matches WHERE id BETWEEN 73 AND 104 ORDER BY id ASC");
-$matches_db = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Load from DB if session is empty
+if (empty($saved_post)) {
+    $stmt = $pdo->prepare("SELECT match_id, tip_winner FROM tips WHERE user_id = ? AND match_id BETWEEN 73 AND 104");
+    $stmt->execute([$user_id]);
+    while ($row = $stmt->fetch()) {
+        $saved_post["winner_" . $row['match_id']] = $row['tip_winner'];
+    }
+    $_SESSION['saved_post'] = $saved_post;
+}
 
+// Load Matches
 $matches = [];
+$stmt = $pdo->query("SELECT * FROM matches WHERE id BETWEEN 73 AND 104 ORDER BY id ASC");
+while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    $matches[$row['id']] = [
+        'id' => $row['id'],
+        'date' => $row['date'],
+        'time' => $row['time'],
+        'stage' => $row['group_name'],
+        'p1' => $row['team1'],
+        'p2' => $row['team2']
+    ];
+}
+
+// Organize into Stages
 $stages = [
     'Round of 32' => [], 'Round of 16' => [], 'Quarter Finals' => [],
     'Semi Finals' => [], 'Third Place' => [], 'Final' => []
 ];
-
-foreach ($matches_db as $m) {
-    $matches[$m['id']] = [
-        'id' => $m['id'],
-        'date' => $m['date'],
-        'time' => $m['time'],
-        'stage' => $m['group_name'],
-        'p1' => $m['team1'],
-        'p2' => $m['team2']
-    ];
-    $stages[$m['group_name']][] = $matches[$m['id']];
+foreach ($matches as $m) {
+    $stages[$m['stage']][] = $m;
 }
 
-// (Removed "Load Existing Tips from DB" block as requested)
+// === 2. THE SIMPLIFIED LOGIC ===
 
-// === 2. Logic Functions (Resolvers) ===
-
-// Resolve placeholders (A1, Winner 73, etc.) to Team Names
-function resolvePossibleTeams($placeholder, $gw, $gr, $gt, $picks, $all_matches) {
-    $candidates = [];
-    $parts = explode('/', $placeholder); // Handle "A3/B3/C3"
-
-    foreach ($parts as $p) {
-        $p = trim($p);
-        $teamName = "";
-
-        // Case 1: Group Positions
-        if (preg_match('/^([A-L])1$/', $p, $m)) {
-            $teamName = $gw[$m[1]] ?? $p;
+// This function takes a code like "A1", "Winner 73", or "A3/B3" 
+// and returns a LIST (Array) of real team names.
+function getTeams($code, $gw, $gr, $gt, $picks, $all_matches) {
+    $list = [];
+    
+    // 1. Handle combinations (e.g. "A3/B3/C3")
+    if (strpos($code, '/') !== false) {
+        $parts = explode('/', $code);
+        foreach ($parts as $part) {
+            // Recursive call for each part
+            $subList = getTeams($part, $gw, $gr, $gt, $picks, $all_matches);
+            foreach ($subList as $name) $list[] = $name;
         }
-        elseif (preg_match('/^([A-L])2$/', $p, $m)) {
-            $teamName = $gr[$m[1]] ?? $p;
-        }
-        elseif (preg_match('/^([A-L])3$/', $p, $m)) {
-            // Only add if this 3rd place team QUALIFIED (exists in the Top 8 list)
-            if (isset($gt[$m[1]])) {
-                $teamName = $gt[$m[1]];
+        return $list;
+    }
+
+    $code = trim($code);
+    $realName = $code; // Default to the code itself if we can't find a name
+
+    // 2. Check for Group Positions (Length is 2, e.g. "A1")
+    if (strlen($code) == 2) {
+        $groupLetter = $code[0]; // "A"
+        $position    = $code[1]; // "1"
+        
+        if ($position == '1') {
+            $realName = $gw[$groupLetter] ?? $code;
+        } elseif ($position == '2') {
+            $realName = $gr[$groupLetter] ?? $code;
+        } elseif ($position == '3') {
+            // Only show if this 3rd place team qualified
+            if (isset($gt[$groupLetter])) {
+                $realName = $gt[$groupLetter];
             } else {
-                continue; // Skip disqualified teams
+                return []; // Return empty list (Team didn't qualify)
             }
-        }
-        
-        // Case 2: Winner of Previous Match
-        elseif (preg_match('/^Winner (\d+)$/i', $p, $m)) {
-            $prevID = (int)$m[1];
-            $teamName = $picks["winner_$prevID"] ?? null;
-        }
-        
-        // Case 3: Loser of Previous Match
-        elseif (preg_match('/^Loser (\d+)$/i', $p, $m)) {
-            $prevID = (int)$m[1];
-            $prevWinner = $picks["winner_$prevID"] ?? null;
-            
-            if ($prevWinner && isset($all_matches[$prevID])) {
-                $prevMatch = $all_matches[$prevID];
-                $prevOpts = getMatchOptions($prevMatch, $gw, $gr, $gt, $picks, $all_matches);
-                $losers = array_diff($prevOpts, [$prevWinner]);
-                foreach ($losers as $l) $candidates[] = $l;
-            } else {
-                $teamName = null;
-            }
-        } 
-        else {
-            $teamName = $p; // Literal string (e.g. if Admin typed a name directly)
-        }
-        
-        if ($teamName && !in_array($teamName, $candidates)) {
-            $candidates[] = $teamName;
         }
     }
-    return $candidates;
+    
+    // 3. Check for "Winner 73"
+    elseif (strpos($code, 'Winner ') === 0) {
+        $prevID = (int)substr($code, 7); // Remove "Winner " to get ID
+        if (!empty($picks["winner_$prevID"])) {
+            $realName = $picks["winner_$prevID"];
+        }
+    }
+    
+    // 4. Check for "Loser 101"
+    elseif (strpos($code, 'Loser ') === 0) {
+        $prevID = (int)substr($code, 6); // Remove "Loser "
+        $prevWinner = $picks["winner_$prevID"] ?? null;
+        
+        if ($prevWinner && isset($all_matches[$prevID])) {
+            $prevMatch = $all_matches[$prevID];
+            // Find who played in that match
+            $t1_opts = getTeams($prevMatch['p1'], $gw, $gr, $gt, $picks, $all_matches);
+            $t2_opts = getTeams($prevMatch['p2'], $gw, $gr, $gt, $picks, $all_matches);
+            $all_opts = array_merge($t1_opts, $t2_opts);
+            
+            // The loser is whoever is NOT the winner
+            foreach ($all_opts as $t) {
+                if ($t !== $prevWinner) $list[] = $t;
+            }
+            return $list; // Return directly
+        }
+    }
+
+    if ($realName) {
+        $list[] = $realName;
+    }
+    
+    return array_unique($list);
 }
 
-// Get dropdown options
-function getMatchOptions($m, $gw, $gr, $gt, $picks, $all_matches) {
-    $side1 = resolvePossibleTeams($m['p1'], $gw, $gr, $gt, $picks, $all_matches);
-    $side2 = resolvePossibleTeams($m['p2'], $gw, $gr, $gt, $picks, $all_matches);
-    $all = array_merge($side1, $side2);
-    return array_values(array_unique($all));
-}
-
-// Get Table Display String
-function getTeamDisplay($placeholder, $gw, $gr, $gt, $picks, $all_matches) {
-    $candidates = resolvePossibleTeams($placeholder, $gw, $gr, $gt, $picks, $all_matches);
-    if (empty($candidates)) return "-";
-    // Show all candidates separated by slash
-    return implode(" / ", $candidates);
-}
-
-// Helper: Check completion
-function isRangeComplete($start, $end, $data) {
+// === 3. Check if a round is finished ===
+function isComplete($start, $end, $data) {
     for ($i = $start; $i <= $end; $i++) {
         if (empty($data["winner_$i"])) return false;
     }
     return true;
 }
 
-// === 3. Handle POST (Save) ===
+// === 4. Handle Save Button ===
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $action = $_POST['action'] ?? '';
 
-    // Capture inputs
+    // Save inputs to Session
     foreach ($matches as $id => $m) {
         if (isset($_POST["winner_$id"])) {
             $saved_post["winner_$id"] = $_POST["winner_$id"];
@@ -141,79 +146,67 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $_SESSION['saved_post'] = $saved_post;
 
     if ($action === 'save') {
-        $valError = null;
         $anchor = "r32";
+        $error = null;
 
-        // Check stages sequentially
-        if (!isRangeComplete(73, 88, $saved_post)) {
-            $valError = "Please complete the Round of 32.";
+        // Check stages in order
+        if (!isComplete(73, 88, $saved_post)) {
+            $error = "Please complete the Round of 32.";
             $anchor = "r32";
-        } elseif (!isRangeComplete(89, 96, $saved_post)) {
-            $valError = "Please complete the Round of 16.";
+        } elseif (!isComplete(89, 96, $saved_post)) {
+            $error = "Please complete the Round of 16.";
             $anchor = "r16";
-        } elseif (!isRangeComplete(97, 100, $saved_post)) {
-            $valError = "Please complete the Quarter Finals.";
+        } elseif (!isComplete(97, 100, $saved_post)) {
+            $error = "Please complete the Quarter Finals.";
             $anchor = "qf";
-        } elseif (!isRangeComplete(101, 102, $saved_post)) {
-            $valError = "Please complete the Semi Finals.";
+        } elseif (!isComplete(101, 102, $saved_post)) {
+            $error = "Please complete the Semi Finals.";
             $anchor = "sf";
-        } elseif (!isRangeComplete(103, 104, $saved_post)) {
-            $valError = "Please predict the Finals.";
+        } elseif (!isComplete(103, 104, $saved_post)) {
+            $error = "Please complete the Finals.";
             $anchor = "final";
         }
 
-        if ($valError) {
-            $error_msg = $valError;
-            // Jump to problem area
+        if ($error) {
+            // Stay here, show error
             header("Location: ko-phase.php#" . $anchor);
             exit;
         } else {
-            // All good -> Save to DB
+            // Save to DB
             try {
                 $pdo->beginTransaction();
-                $sql = "INSERT INTO tips (user_id, match_id, tip_winner) 
-                        VALUES (?, ?, ?) 
-                        ON DUPLICATE KEY UPDATE tip_winner = VALUES(tip_winner)";
-                $stmt = $pdo->prepare($sql);
-
-                foreach ($saved_post as $key => $val) {
-                    if (strpos($key, 'winner_') === 0 && !empty($val)) {
-                        $mid = (int)str_replace('winner_', '', $key);
-                        $stmt->execute([$user_id, $mid, $val]);
+                $stmt = $pdo->prepare("INSERT INTO tips (user_id, match_id, tip_winner) 
+                                       VALUES (?, ?, ?) 
+                                       ON DUPLICATE KEY UPDATE tip_winner = VALUES(tip_winner)");
+                foreach ($saved_post as $k => $v) {
+                    if (strpos($k, 'winner_') === 0 && !empty($v)) {
+                        $mid = (int)str_replace('winner_', '', $k);
+                        $stmt->execute([$user_id, $mid, $v]);
                     }
                 }
                 $pdo->commit();
-                
                 header("Location: mytips.php");
                 exit;
-
-            } catch (Exception $e) {
-                $pdo->rollBack();
-                $error_msg = "Database Error: " . $e->getMessage();
-            }
+            } catch (Exception $e) { $pdo->rollBack(); }
         }
     }
 }
 
-// Determine Visibility
+// Logic for showing rounds
 $show_r32 = true;
-$show_r16 = isRangeComplete(73, 88, $saved_post);
-$show_qf  = isRangeComplete(89, 96, $saved_post) && $show_r16;
-$show_sf  = isRangeComplete(97, 100, $saved_post) && $show_qf;
-$show_final = isRangeComplete(101, 102, $saved_post) && $show_sf;
-
+$show_r16 = isComplete(73, 88, $saved_post);
+$show_qf  = isComplete(89, 96, $saved_post) && $show_r16;
+$show_sf  = isComplete(97, 100, $saved_post) && $show_qf;
+$show_final = isComplete(101, 102, $saved_post) && $show_sf;
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8">
   <title>KO Phase</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style> 
-    body{background:#f8f9fa} 
-    table{background:#fff} 
-    th,td{text-align:center;vertical-align:middle} 
-  </style>
+  <style> body{background:#f8f9fa} table{background:#fff} th,td{text-align:center;vertical-align:middle} </style>
 </head>
 <body>
 <div class="container my-5">
@@ -223,39 +216,21 @@ $show_final = isRangeComplete(101, 102, $saved_post) && $show_sf;
     <a href="home.php" class="btn btn-outline-secondary btn-sm">Home</a>
   </div>
 
-  <?php if ($error_msg): ?>
-      <div class="alert alert-danger text-center alert-dismissible fade show" role="alert">
-          <?= htmlspecialchars($error_msg) ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-      </div>
-  <?php endif; ?>
-
-  <?php if (empty($matches)): ?>
-      <div class="alert alert-warning text-center">No KO matches found in database.</div>
-  <?php else: ?>
-
   <form method="post">
-    
     <?php 
-    $renderList = [
-        'Round of 32' => $show_r32,
-        'Round of 16' => $show_r16,
-        'Quarter Finals' => $show_qf,
-        'Semi Finals' => $show_sf,
-        'Third Place' => $show_final,
-        'Final' => $show_final
-    ];
-    
-    $anchorIds = [
-        'Round of 32' => 'r32', 'Round of 16' => 'r16', 'Quarter Finals' => 'qf',
-        'Semi Finals' => 'sf', 'Third Place' => 'final', 'Final' => 'final'
+    $viewConfig = [
+        'Round of 32' => ['show' => $show_r32, 'id' => 'r32'],
+        'Round of 16' => ['show' => $show_r16, 'id' => 'r16'],
+        'Quarter Finals' => ['show' => $show_qf, 'id' => 'qf'],
+        'Semi Finals' => ['show' => $show_sf, 'id' => 'sf'],
+        'Third Place' => ['show' => $show_final, 'id' => 'final'],
+        'Final' => ['show' => $show_final, 'id' => 'final']
     ];
 
-    foreach ($renderList as $stageName => $isVisible):
-        if (!$isVisible || empty($stages[$stageName])) continue;
-        $anchorId = $anchorIds[$stageName] ?? '';
+    foreach ($viewConfig as $stageName => $cfg):
+        if (!$cfg['show'] || empty($stages[$stageName])) continue;
     ?>
-        <div id="<?= $anchorId ?>" class="mt-5">
+        <div id="<?= $cfg['id'] ?>" class="mt-5">
             <h3 class="text-center mb-3"><?= htmlspecialchars($stageName) ?></h3>
             <div class="table-responsive">
                 <table class="table table-bordered text-center align-middle">
@@ -272,21 +247,29 @@ $show_final = isRangeComplete(101, 102, $saved_post) && $show_sf;
                         <?php foreach ($stages[$stageName] as $m): 
                             $id = $m['id'];
                             
-                            $options = getMatchOptions($m, $group_winners, $group_runners, $group_third, $saved_post, $matches);
-                            $t1_display = getTeamDisplay($m['p1'], $group_winners, $group_runners, $group_third, $saved_post, $matches);
-                            $t2_display = getTeamDisplay($m['p2'], $group_winners, $group_runners, $group_third, $saved_post, $matches);
+                            // 1. Get List of Teams for Team 1 column
+                            $teams1 = getTeams($m['p1'], $group_winners, $group_runners, $group_third, $saved_post, $matches);
+                            $label1 = empty($teams1) ? "-" : implode(" / ", $teams1);
+
+                            // 2. Get List of Teams for Team 2 column
+                            $teams2 = getTeams($m['p2'], $group_winners, $group_runners, $group_third, $saved_post, $matches);
+                            $label2 = empty($teams2) ? "-" : implode(" / ", $teams2);
+
+                            // 3. Merge for Dropdown
+                            $dropdownOptions = array_unique(array_merge($teams1, $teams2));
                             
                             $selected = $saved_post["winner_$id"] ?? '';
+                            $timeStr = substr($m['time'], 0, 5);
                         ?>
                         <tr>
                             <td><?= htmlspecialchars($m['date']) ?></td>
-                            <td><?= htmlspecialchars($m['time']) ?></td>
-                            <td><?= htmlspecialchars($t1_display) ?></td>
-                            <td><?= htmlspecialchars($t2_display) ?></td>
+                            <td><?= $timeStr ?></td>
+                            <td><?= htmlspecialchars($label1) ?></td>
+                            <td><?= htmlspecialchars($label2) ?></td>
                             <td>
                                 <select name="winner_<?= $id ?>" class="form-select text-center fw-bold">
-                                    <option value="">-- Select Winner --</option>
-                                    <?php foreach ($options as $opt): ?>
+                                    <option value="">-- Select --</option>
+                                    <?php foreach ($dropdownOptions as $opt): ?>
                                         <option value="<?= htmlspecialchars($opt) ?>" <?= ($selected === $opt ? 'selected' : '') ?>>
                                             <?= htmlspecialchars($opt) ?>
                                         </option>
@@ -308,7 +291,6 @@ $show_final = isRangeComplete(101, 102, $saved_post) && $show_sf;
     </div>
 
   </form>
-  <?php endif; ?>
 </div>
 </body>
 </html>

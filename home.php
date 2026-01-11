@@ -47,7 +47,7 @@ require_once 'db.php'; // Include DB connection for checking completion status
             <p>You have administrative privileges.</p>
             <a href="update_results.php" class="button admin">📊 Update Results</a>
             <a href="tournament_schedule.php" class="button admin">🏟️ Manage Schedule</a>
-            <a href="teamsetup.php" class="button admin">⚙️ Setup Matches</a>
+            <a href="teamsetup.php" class="button admin">⚙️ Manage Teams</a>
 
         <!-- 3. If logged in but NOT admin (Regular User) -->
         <?php else: ?>

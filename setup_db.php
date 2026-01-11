@@ -18,7 +18,6 @@ try {
     echo "✅ Table 'users' created.<br>";
 
     // Matches Table
-    // We stick to the text file logic: ID 1-104 is fixed
     $pdo->exec("CREATE TABLE IF NOT EXISTS matches (
         id INT PRIMARY KEY,
         date DATE,
@@ -32,8 +31,15 @@ try {
     )");
     echo "✅ Table 'matches' created.<br>";
 
+    // Teams Table (New)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS teams (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        group_name VARCHAR(5) NOT NULL,
+        name VARCHAR(100) NOT NULL UNIQUE
+    )");
+    echo "✅ Table 'teams' created.<br>";
+
     // Tips Table
-    // Unique constraint ensures one tip per match per user
     $pdo->exec("CREATE TABLE IF NOT EXISTS tips (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
@@ -58,12 +64,10 @@ try {
         foreach ($lines as $line) {
             $parts = explode("|", $line);
             if (count($parts) >= 2) {
-                // format: username|hash|profile|role
                 $u = trim($parts[0]);
                 $h = trim($parts[1]);
                 $p = trim($parts[2] ?? '');
                 $r = trim($parts[3] ?? 'user');
-                
                 $stmt->execute([$u, $h, $p, $r]);
                 $count++;
             }
@@ -77,21 +81,13 @@ try {
     if (file_exists("matches.txt")) {
         $lines = file("matches.txt", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         $count = 0;
-        // INSERT IGNORE keeps existing IDs if you run this twice
         $stmt = $pdo->prepare("INSERT IGNORE INTO matches (id, date, time, group_name, team1, team2) VALUES (?, ?, ?, ?, ?, ?)");
 
         foreach ($lines as $line) {
             $parts = explode("|", $line);
-            // format: ID|Date|Time|Group|Team1|Team2
             if (count($parts) >= 6) {
                 $id = (int)$parts[0];
-                $date = trim($parts[1]);
-                $time = trim($parts[2]);
-                $grp = trim($parts[3]);
-                $t1 = trim($parts[4]);
-                $t2 = trim($parts[5]);
-
-                $stmt->execute([$id, $date, $time, $grp, $t1, $t2]);
+                $stmt->execute([$id, trim($parts[1]), trim($parts[2]), trim($parts[3]), trim($parts[4]), trim($parts[5])]);
                 $count++;
             }
         }
@@ -100,7 +96,33 @@ try {
         echo "⚠️ matches.txt not found. Skipping match migration.<br>";
     }
 
-    // === 4. Migrate Results (results.txt) - Optional Update ===
+    // === 4. Migrate Teams (teams.txt) ===
+    if (file_exists("teams.txt")) {
+        $lines = file("teams.txt", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $count = 0;
+        $stmt = $pdo->prepare("INSERT IGNORE INTO teams (group_name, name) VALUES (?, ?)");
+
+        foreach ($lines as $line) {
+            $parts = explode("|", $line);
+            if (count($parts) >= 2) {
+                // format: Group|TeamName
+                $stmt->execute([trim($parts[0]), trim($parts[1])]);
+                $count++;
+            }
+        }
+        echo "📦 Migrated $count teams from teams.txt<br>";
+    } else {
+        // Fallback: Populate from matches table if teams.txt is missing
+        echo "⚠️ teams.txt not found. Populating unique teams from matches table...<br>";
+        $sql = "INSERT IGNORE INTO teams (group_name, name) 
+                SELECT group_name, team1 FROM matches WHERE group_name REGEXP '^[A-L]$'
+                UNION 
+                SELECT group_name, team2 FROM matches WHERE group_name REGEXP '^[A-L]$'";
+        $pdo->exec($sql);
+        echo "📦 Populated teams table from scheduled matches.<br>";
+    }
+
+    // === 5. Migrate Results (results.txt) ===
     if (file_exists("results.txt")) {
         $lines = file("results.txt", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         $count = 0;
@@ -112,11 +134,9 @@ try {
             $id = (int)$parts[0];
             
             if (count($parts) === 3) {
-                // Group: ID|Home|Away
                 $stmtGroup->execute([(int)$parts[1], (int)$parts[2], $id]);
                 $count++;
             } elseif (count($parts) === 2) {
-                // KO: ID|Winner
                 $stmtKO->execute([trim($parts[1]), $id]);
                 $count++;
             }
